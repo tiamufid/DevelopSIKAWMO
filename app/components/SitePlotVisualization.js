@@ -4,6 +4,8 @@ import LoadingSpinner from './LoadingSpinner';
 export default function SitePlotVisualization({ 
   onPointClick, 
   selectedZone, 
+  selectedArea = 'ORF',
+  layoutImage = null,
   highlightPermitId,
   showOnlyPermits = false 
 }) {
@@ -12,6 +14,17 @@ export default function SitePlotVisualization({
   const [selectedPoint, setSelectedPoint] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
+  const areaImages = {
+    ORF: '/images/layout-orf.png',
+    LSB: '/images/layouts/lsb/layout.png',
+    WEST: '/images/layouts/west/cpp1/main-deck.png',
+    EAST: '/images/layouts/east/ppp/main-deck.png',
+    FSO: '/images/layouts/fso/main-floor.png',
+    West: '/images/layouts/west/cpp1/main-deck.png',
+    East: '/images/layouts/east/ppp/main-deck.png',
+  };
+  const bgImage = layoutImage || areaImages[selectedArea] || '/images/layout-orf.png';
 
   useEffect(() => {
     fetchVisualizationData();
@@ -135,7 +148,7 @@ export default function SitePlotVisualization({
         <div 
           className="relative w-full h-96 bg-gray-100 cursor-crosshair"
           style={{
-            backgroundImage: "url('/images/site-plan-layout.png')",
+            backgroundImage: `url('${bgImage}')`,
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center'

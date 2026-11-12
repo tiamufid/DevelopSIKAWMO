@@ -3,6 +3,15 @@ import Input from "./Input";
 import Button from "./Button";
 import SitePlotVisualization from "./SitePlotVisualization";
 import NotificationToast from "./NotificationToast";
+import {
+  AREA_HIERARCHY,
+  getAreaList,
+  getFacilitiesByArea,
+  getDecksByFacility,
+  getLayout,
+  formatLocationPath,
+  parseLocationFromPermit
+} from "@/lib/areaHierarchy";
 
 export default function PermitPlanningForm({
   onSubmitSuccess,
@@ -12,10 +21,10 @@ export default function PermitPlanningForm({
 }) {
   const [formData, setFormData] = useState({
     permitNumber: "",
+    areaName: "ORF",
     workType: "",
     workDescription: "",
     workLocation: "", // Add workLocation field
-    riskLevel: "LOW",
     zone: "",
     coordinates: "",
     startDate: "",
@@ -43,6 +52,55 @@ export default function PermitPlanningForm({
   const [submittingForApproval, setSubmittingForApproval] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
 
+  // Hierarchical location state (Area -> Facility -> Deck)
+  const [selectedArea, setSelectedArea] = useState("ORF");
+  const [selectedFacility, setSelectedFacility] = useState("ORF");
+  const [selectedDeck, setSelectedDeck] = useState("DEFAULT");
+
+  const handleAreaChange = (newAreaId) => {
+    setSelectedArea(newAreaId);
+    const facilities = getFacilitiesByArea(newAreaId);
+    const firstFac = facilities[0]?.id || "DEFAULT";
+    setSelectedFacility(firstFac);
+
+    const decks = getDecksByFacility(newAreaId, firstFac);
+    const firstDeck = decks[0]?.id || "DEFAULT";
+    setSelectedDeck(firstDeck);
+
+    const formattedLoc = formatLocationPath(newAreaId, firstFac, firstDeck);
+    setFormData((prev) => ({
+      ...prev,
+      areaName: newAreaId,
+      workLocation: formattedLoc,
+    }));
+  };
+
+  const handleFacilityChange = (newFacId) => {
+    setSelectedFacility(newFacId);
+    const decks = getDecksByFacility(selectedArea, newFacId);
+    const firstDeck = decks[0]?.id || "DEFAULT";
+    setSelectedDeck(firstDeck);
+
+    const formattedLoc = formatLocationPath(selectedArea, newFacId, firstDeck);
+    setFormData((prev) => ({
+      ...prev,
+      workLocation: formattedLoc,
+    }));
+  };
+
+  const handleDeckChange = (newDeckId) => {
+    setSelectedDeck(newDeckId);
+    const formattedLoc = formatLocationPath(selectedArea, selectedFacility, newDeckId);
+    setFormData((prev) => ({
+      ...prev,
+      workLocation: formattedLoc,
+    }));
+  };
+
+  const currentLayout = getLayout(selectedArea, selectedFacility, selectedDeck);
+  const availableFacilities = getFacilitiesByArea(selectedArea);
+  const availableDecks = getDecksByFacility(selectedArea, selectedFacility);
+
   // Zone definitions
   const zones = [
     { code: "PRC", name: "Processing/Production Area" },
@@ -69,8 +127,6 @@ export default function PermitPlanningForm({
     },
     { value: "HOT_WORK_FLAME", label: "Hot Work", color: "red" },
   ];
-
-  const riskLevels = ["LOW", "MEDIUM", "HIGH"];
 
   // Function to normalize coordinates to "x,y" format
   const normalizeCoordinates = (coords) => {
@@ -111,6 +167,11 @@ export default function PermitPlanningForm({
   useEffect(() => {
     if (editData) {
       console.log("Edit data received:", editData);
+
+      const locInfo = parseLocationFromPermit(editData);
+      setSelectedArea(locInfo.areaId || "ORF");
+      setSelectedFacility(locInfo.facilityId || "DEFAULT");
+      setSelectedDeck(locInfo.deckId || "DEFAULT");
 
       // Parse relatedDocuments if it's a string (from database)
       let parsedRelatedDocuments = {
@@ -155,10 +216,10 @@ export default function PermitPlanningForm({
       setFormData({
         ...editData,
         permitNumber: editData.permitNumber || "",
+        areaName: editData.areaName || "ORF",
         workType: editData.workType || "",
         workDescription: editData.workDescription || "",
         workLocation: editData.workLocation || "",
-        riskLevel: editData.riskLevel || "LOW",
         zone: editData.zone || "",
         startDate: editData.startDate ? editData.startDate.split("T")[0] : "",
         endDate: editData.endDate ? editData.endDate.split("T")[0] : "",
@@ -178,21 +239,17 @@ export default function PermitPlanningForm({
     }
   }, [editData]);
 
-  // Auto-set endDate based on work type and risk level if not already set
+  // Auto-set endDate based on work type if not already set
   useEffect(() => {
     if (
       formData.startDate &&
       formData.workType &&
-      formData.riskLevel &&
       !formData.endDate
     ) {
       const startDate = new Date(formData.startDate);
       let validDays = 7; // default
 
-      // Adjust based on work type and risk level
-      if (formData.riskLevel === "HIGH") validDays = 3;
-      else if (formData.riskLevel === "MEDIUM") validDays = 5;
-
+      // Adjust based on work type
       if (
         formData.workType === "HOT_WORK_SPARK" ||
         formData.workType === "HOT_WORK_FLAME"
@@ -209,7 +266,7 @@ export default function PermitPlanningForm({
         endDate: endDate.toISOString().split("T")[0],
       }));
     }
-  }, [formData.startDate, formData.workType, formData.riskLevel]);
+  }, [formData.startDate, formData.workType]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -345,6 +402,8 @@ export default function PermitPlanningForm({
 
       const submitData = {
         ...formData,
+        areaName: selectedArea,
+        workLocation: formatLocationPath(selectedArea, selectedFacility, selectedDeck),
         userId: userData.id,
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
@@ -378,12 +437,15 @@ export default function PermitPlanningForm({
 
         if (!editData) {
           // Reset form for new entries
+          setSelectedArea("ORF");
+          setSelectedFacility("ORF");
+          setSelectedDeck("DEFAULT");
           setFormData({
             permitNumber: "",
+            areaName: "ORF",
             workType: "",
             workDescription: "",
             workLocation: "",
-            riskLevel: "LOW",
             zone: "",
             coordinates: "",
             startDate: "",
@@ -461,17 +523,18 @@ export default function PermitPlanningForm({
   };
 
   const handleMapClick = (coordinates) => {
+    const locPath = formatLocationPath(selectedArea, selectedFacility, selectedDeck);
     setFormData((prev) => ({
       ...prev,
       coordinates: `${coordinates.x},${coordinates.y}`,
+      areaName: selectedArea,
+      workLocation: locPath,
     }));
 
     // Show brief success feedback using notification system
     if (coordinates.type === "coordinate" && showNotification) {
       showNotification(
-        `✓ Coordinates set: ${coordinates.x.toFixed(
-          1
-        )}, ${coordinates.y.toFixed(1)}`,
+        `✓ Koordinat (${coordinates.x.toFixed(1)}, ${coordinates.y.toFixed(1)}) disimpan pada ${locPath}`,
         "success"
       );
     }
@@ -539,24 +602,6 @@ export default function PermitPlanningForm({
             required
           />
 
-          <div>
-            <label className="block text-sm font-medium text-quaternary mb-1">
-              Risk Level *
-            </label>
-            <select
-              name="riskLevel"
-              value={formData.riskLevel}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              required
-            >
-              {riskLevels.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <div>
@@ -901,6 +946,113 @@ export default function PermitPlanningForm({
             Location Information
           </h3>
 
+          {/* 3-Tier Hierarchical Location Selection (Area -> Facility -> Deck) */}
+          <div className="space-y-4 mb-5">
+            {/* Tier 1: Area Selection (5 Area) */}
+            <div>
+              <label className="block text-sm font-semibold text-quaternary mb-2">
+                1. Pilih Area Utama PHE WMO *
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {getAreaList().map((area) => (
+                  <button
+                    type="button"
+                    key={area.id}
+                    onClick={() => handleAreaChange(area.id)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      selectedArea === area.id
+                        ? "border-primary bg-primary/10 text-primary font-bold shadow-sm ring-2 ring-primary/20"
+                        : "border-gray-200 bg-white hover:border-gray-300 text-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">{area.icon}</span>
+                      {selectedArea === area.id && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span>
+                      )}
+                    </div>
+                    <div className="text-sm font-bold mt-1.5">{area.name}</div>
+                    <p className="text-[11px] text-gray-500 line-clamp-1">{area.fullName}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tier 2: Facility / Sub-Area Selection (if area has > 1 facility) */}
+            {availableFacilities.length > 1 && (
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                  2. Pilih Fasilitas / Sub-Area di {AREA_HIERARCHY[selectedArea]?.name}:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {availableFacilities.map((fac) => {
+                    const isSelected = selectedFacility === fac.id;
+                    return (
+                      <button
+                        type="button"
+                        key={fac.id}
+                        onClick={() => handleFacilityChange(fac.id)}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-quaternary text-white shadow-sm ring-2 ring-quaternary/20"
+                            : "bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+                        }`}
+                      >
+                        <span>🏢</span>
+                        <span>{fac.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tier 3: Deck / Platform Selection (if facility has > 1 deck) */}
+            {availableDecks.length > 1 && (
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                  3. Pilih Deck / Level / Platform:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {availableDecks.map((deck) => {
+                    const isSelected = selectedDeck === deck.id;
+                    return (
+                      <button
+                        type="button"
+                        key={deck.id}
+                        onClick={() => handleDeckChange(deck.id)}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-secondary text-white shadow-sm ring-2 ring-secondary/20"
+                            : "bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+                        }`}
+                      >
+                        <span>📑</span>
+                        <span>{deck.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Location Summary Alert */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📍</span>
+                <div>
+                  <div className="text-xs text-blue-600 font-medium">Lokasi Kerja Terpilih:</div>
+                  <div className="text-sm font-bold text-blue-900">
+                    {formatLocationPath(selectedArea, selectedFacility, selectedDeck)}
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 bg-white px-2.5 py-1 rounded-md border border-blue-200">
+                Denah: <span className="font-semibold text-gray-800">{currentLayout?.name || "Main Layout"}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-quaternary mb-1">
@@ -1137,6 +1289,8 @@ export default function PermitPlanningForm({
             <SitePlotVisualization
               onPointClick={handleMapClick}
               selectedZone={formData.zone}
+              selectedArea={selectedArea}
+              layoutImage={currentLayout?.image}
               showOnlyPermits={false}
             />
           </div>

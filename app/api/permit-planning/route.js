@@ -7,11 +7,13 @@ export async function GET(request) {
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
     const zone = searchParams.get('zone');
+    const area = searchParams.get('area') || searchParams.get('areaName');
     
     const where = {};
     if (userId && userId !== 'undefined') where.userId = parseInt(userId);
     if (status) where.status = status;
     if (zone) where.zone = zone;
+    if (area && area !== 'all') where.areaName = area;
     
     const permits = await prisma.permitPlanning.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
@@ -72,6 +74,7 @@ export async function POST(request) {
       permitNumber,
       workDescription,
       zone, // Using zone instead of workLocation to match form
+      areaName,
       workType,
       riskLevel,
       startDate,
@@ -164,6 +167,7 @@ export async function POST(request) {
         permitNumber,
         workDescription: workDescription.trim(),
         workLocation: zone, // Use zone as work location
+        areaName: areaName || 'ORF',
         coordinates: coordinatesData,
         zone: zone,
         workType: workType || null,

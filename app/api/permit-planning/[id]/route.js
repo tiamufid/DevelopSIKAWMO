@@ -82,6 +82,7 @@ export async function PUT(request, { params }) {
         permitNumber: body.permitNumber,
         workDescription: body.workDescription,
         workLocation: body.workLocation || body.zone, // fallback to zone if workLocation not provided
+        areaName: body.areaName || existingPermit.areaName || 'ORF',
         workType: body.workType,
         zone: body.zone,
         riskLevel: body.riskLevel,

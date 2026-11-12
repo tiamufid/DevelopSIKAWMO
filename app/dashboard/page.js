@@ -255,31 +255,7 @@ function Dashboard({ user }) {
             </div>
             
             {/* Additional Statistics Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-              {/* Risk Level Distribution */}
-              <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-l-purple-500">
-                <h4 className="text-sm font-medium text-gray-600 mb-2">Risk Levels</h4>
-                <div className="space-y-1">
-                  {(() => {
-                    const riskData = dashboardData?.permits?.reduce((acc, permit) => {
-                      acc[permit.riskLevel] = (acc[permit.riskLevel] || 0) + 1;
-                      return acc;
-                    }, {}) || {};
-                    
-                    return Object.entries(riskData).map(([level, count]) => (
-                      <div key={level} className="flex justify-between items-center text-xs">
-                        <span className={`px-2 py-1 rounded-full ${
-                          level === 'HIGH' ? 'bg-red-100 text-red-700' :
-                          level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>{level}</span>
-                        <span className="font-medium">{count}</span>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </div>
-              
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
               {/* Work Type Distribution */}
               <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-l-blue-500">
                 <h4 className="text-sm font-medium text-gray-600 mb-2">Work Types</h4>
@@ -513,13 +489,6 @@ function Dashboard({ user }) {
                               };
                               return workTypes[permit.workType] || permit.workType;
                             })()}
-                          </span>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            permit.riskLevel === 'HIGH' ? 'bg-red-100 text-red-700' :
-                            permit.riskLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
-                            {permit.riskLevel}
                           </span>
                         </div>
                         

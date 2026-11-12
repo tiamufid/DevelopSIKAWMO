@@ -3,14 +3,62 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import withAuth from "../components/withAuth";
+import {
+  AREA_HIERARCHY,
+  getAreaList,
+  getFacilitiesByArea,
+  getDecksByFacility,
+  getLayout,
+  getLayoutById,
+  formatLocationPath,
+  parseLocationFromPermit
+} from "@/lib/areaHierarchy";
 
 function SitePlotPlans() {
   const [selectedPoint, setSelectedPoint] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState("all");
-  const [selectedArea, setSelectedArea] = useState("all");
+  const [selectedArea, setSelectedArea] = useState("ORF"); // ORF, WEST, EAST, FSO, LSB, ALL
+  const [selectedFacility, setSelectedFacility] = useState("ORF");
+  const [selectedDeck, setSelectedDeck] = useState("DEFAULT");
+  const [selectedZone, setSelectedZone] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [plotPoints, setPlotPoints] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleSelectArea = (areaId) => {
+    setSelectedArea(areaId);
+    setSelectedPoint(null);
+    if (areaId === "ALL") return;
+
+    const facilities = getFacilitiesByArea(areaId);
+    const firstFac = facilities[0]?.id || "DEFAULT";
+    setSelectedFacility(firstFac);
+
+    const decks = getDecksByFacility(areaId, firstFac);
+    const firstDeck = decks[0]?.id || "DEFAULT";
+    setSelectedDeck(firstDeck);
+  };
+
+  const handleSelectFacility = (facId) => {
+    setSelectedFacility(facId);
+    setSelectedPoint(null);
+
+    const decks = getDecksByFacility(selectedArea, facId);
+    const firstDeck = decks[0]?.id || "DEFAULT";
+    setSelectedDeck(firstDeck);
+  };
+
+  const handleSelectDeck = (deckId) => {
+    setSelectedDeck(deckId);
+    setSelectedPoint(null);
+  };
+
+  const currentLayout = selectedArea !== "ALL"
+    ? getLayout(selectedArea, selectedFacility, selectedDeck)
+    : null;
+  const currentLayoutImage = currentLayout?.image || "/images/layout-orf.png";
+  const availableFacilities = selectedArea !== "ALL" ? getFacilitiesByArea(selectedArea) : [];
+  const availableDecks = selectedArea !== "ALL" ? getDecksByFacility(selectedArea, selectedFacility) : [];
 
   useEffect(() => {
     fetchData();
@@ -146,6 +194,7 @@ function SitePlotPlans() {
             }),
             performingAuthority: permit.performingAuthority || "N/A",
             zone: permit.zone,
+            areaName: permit.areaName || "ORF", // Default ke ORF jika belum ada
             area: permit.zone, // Add this for area filtering to work
             company: permit.company,
             riskLevel: permit.riskLevel,
@@ -352,30 +401,46 @@ function SitePlotPlans() {
 
   const getFilteredPoints = () => {
     let filtered = plotPoints;
-    
-    console.log('🔍 Filtering points:', {
-      totalPoints: plotPoints.length,
-      selectedFilter: selectedFilter,
-      selectedArea: selectedArea,
-      selectedStatus: selectedStatus
-    });
 
+    // 1. Filter by Area (ORF, WEST, EAST, FSO, LSB, ALL)
+    if (selectedArea !== "ALL") {
+      filtered = filtered.filter((point) => {
+        const pArea = (point.areaName || "ORF").toUpperCase();
+        return pArea === selectedArea.toUpperCase();
+      });
+
+      // Filter by Facility if applicable
+      if (selectedFacility && selectedFacility !== "DEFAULT" && availableFacilities.length > 1) {
+        filtered = filtered.filter((point) => {
+          const loc = parseLocationFromPermit(point);
+          return loc.facilityId === selectedFacility;
+        });
+      }
+
+      // Filter by Deck if applicable
+      if (selectedDeck && selectedDeck !== "DEFAULT" && availableDecks.length > 1) {
+        filtered = filtered.filter((point) => {
+          const loc = parseLocationFromPermit(point);
+          return loc.deckId === selectedDeck;
+        });
+      }
+    }
+
+    // 2. Filter by Work Type
     if (selectedFilter !== "all") {
       filtered = filtered.filter((point) => point.type === selectedFilter);
-      console.log(`📝 After type filter (${selectedFilter}): ${filtered.length} points`);
     }
 
-    if (selectedArea !== "all") {
-      filtered = filtered.filter((point) => point.area === selectedArea);
-      console.log(`🗺️ After area filter (${selectedArea}): ${filtered.length} points`);
+    // 3. Filter by Zone
+    if (selectedZone !== "all") {
+      filtered = filtered.filter((point) => point.zone === selectedZone);
     }
 
+    // 4. Filter by Status
     if (selectedStatus !== "all") {
       filtered = filtered.filter((point) => point.status === selectedStatus);
-      console.log(`🔄 After status filter (${selectedStatus}): ${filtered.length} points`);
     }
 
-    console.log('🎯 Final filtered points:', filtered);
     return filtered;
   };
 
@@ -391,8 +456,8 @@ function SitePlotPlans() {
     { value: "BC", label: "Breaking Containment (Black)", color: "#1F2937" },
   ];
 
-  const areaOptions = [
-    { value: "all", label: "Semua Area", color: "#6B7280" },
+  const zoneOptions = [
+    { value: "all", label: "Semua Zona", color: "#6B7280" },
     { value: "PRC", label: "PRC", color: "#EF4444" },
     { value: "UTL", label: "UTL", color: "#F97316" },
     { value: "BLD", label: "BLD", color: "#EAB308" },
@@ -402,6 +467,7 @@ function SitePlotPlans() {
     { value: "WS", label: "WS", color: "#06B6D4" },
     { value: "GMS", label: "GMS", color: "#8B5CF6" },
   ];
+  const areaOptions = zoneOptions; // Alias for backward compatibility
 
   const statusOptions = [
     { value: "all", label: "Semua Status", color: "#6B7280" },
@@ -430,23 +496,108 @@ function SitePlotPlans() {
       <div className="p-4 lg:p-6">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
             <div>
-              <h1 className="text-2xl font-bold text-quaternary">
-                Site Plot Plans
-              </h1>
-              <p className="text-gray-600">
-                Visualisasi lokasi kerja dan permit planning
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-quaternary">
+                  Site Plot Plans
+                </h1>
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
+                  {selectedArea === "all" ? "Semua Area" : AREA_CONFIGS[selectedArea]?.fullName || selectedArea}
+                </span>
+              </div>
+              <p className="text-gray-600 text-sm mt-1">
+                Visualisasi lokasi kerja dan permit planning PHE WMO (ORF, LSB, East, West)
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500">ORF PHE WMO</div>
-              <div className="mt-2">
-                <span className="text-xs text-gray-500">Total Permit</span>
-                <div className="text-4xl font-bold text-quaternary">
-                  {loading ? "..." : plotPoints.length}
+            <div className="flex items-center gap-6 self-end md:self-auto">
+              <div className="text-right">
+                <div className="text-sm font-semibold text-gray-700">
+                  {selectedArea === "all" ? "PHE WMO (Semua Area)" : AREA_CONFIGS[selectedArea]?.tagline || `${selectedArea} PHE WMO`}
+                </div>
+                <div className="mt-1">
+                  <span className="text-xs text-gray-500">Permit Aktif di Area</span>
+                  <div className="text-3xl font-bold text-quaternary">
+                    {loading ? "..." : getFilteredPoints().length}
+                  </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Area Selector Tabs (ORF, LSB, East, West) */}
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Pilihan Area Kerja Operasional:
+              </span>
+              <span className="text-xs text-gray-500">
+                Pilih area untuk memfilter permit dan denah lokasi
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {Object.keys(AREA_CONFIGS).map((areaKey) => {
+                const conf = AREA_CONFIGS[areaKey];
+                const isSelected = selectedArea === areaKey;
+                const areaPermitsCount = plotPoints.filter(p => (p.areaName || "ORF") === areaKey).length;
+                return (
+                  <button
+                    key={areaKey}
+                    onClick={() => {
+                      setSelectedArea(areaKey);
+                      setSelectedPoint(null);
+                    }}
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
+                      isSelected
+                        ? `${conf.activeClass} border-transparent`
+                        : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{conf.icon}</span>
+                      <div className="text-left">
+                        <div className="font-bold leading-tight">{conf.name}</div>
+                        <div className={`text-[10px] leading-tight ${isSelected ? "text-white/80" : "text-gray-500"}`}>
+                          {conf.fullName}
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                      isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                    }`}>
+                      {areaPermitsCount}
+                    </span>
+                  </button>
+                );
+              })}
+              
+              {/* Option to view All Areas */}
+              <button
+                onClick={() => {
+                  setSelectedArea("all");
+                  setSelectedPoint(null);
+                }}
+                className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
+                  selectedArea === "all"
+                    ? "bg-gray-900 text-white shadow-md ring-2 ring-gray-400 border-transparent"
+                    : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🌐</span>
+                  <div className="text-left">
+                    <div className="font-bold leading-tight">Semua Area</div>
+                    <div className={`text-[10px] leading-tight ${selectedArea === "all" ? "text-white/80" : "text-gray-500"}`}>
+                      Semua Wilayah
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  selectedArea === "all" ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                }`}>
+                  {plotPoints.length}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -460,7 +611,7 @@ function SitePlotPlans() {
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-quaternary">
-                    Layout Denah Site
+                    Layout Denah Site: {selectedArea === "all" ? "Semua Area" : `${selectedArea} (${AREA_CONFIGS[selectedArea]?.fullName})`}
                   </h2>
                   <button
                     onClick={fetchData}
@@ -512,18 +663,18 @@ function SitePlotPlans() {
                     </div>
                   </div>
 
-                  {/* Area Filter */}
+                  {/* Zone Filter */}
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 mb-2">
-                      Filter by Area:
+                      Filter by Zona:
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {areaOptions.map((option) => (
+                      {zoneOptions.map((option) => (
                         <button
                           key={option.value}
-                          onClick={() => setSelectedArea(option.value)}
+                          onClick={() => setSelectedZone(option.value)}
                           className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all ${
-                            selectedArea === option.value
+                            selectedZone === option.value
                               ? "bg-quaternary text-white"
                               : "bg-gray-100 hover:bg-gray-200"
                           }`}
@@ -595,12 +746,30 @@ function SitePlotPlans() {
               <div className="relative w-full flex-1">
                 <div className="relative inline-block w-full h-full">
                   <div className="relative bg-gray-100 rounded-lg overflow-hidden h-full min-h-[400px]">
+                    {/* Active Area Badge Overlay */}
+                    <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm border border-gray-200 z-10 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                      <span className="text-xs font-bold text-gray-800">
+                        {selectedArea === "all"
+                          ? "Semua Area PHE WMO"
+                          : `${selectedArea} - ${AREA_CONFIGS[selectedArea]?.fullName || selectedArea}`}
+                      </span>
+                    </div>
+
                     <Image
-                      src="/images/layout-orf.png"
-                      alt="Site Plot Plan Layout"
+                      src={
+                        selectedArea === "LSB"
+                          ? "/images/layout-lsb.png"
+                          : selectedArea === "East"
+                          ? "/images/layout-east.png"
+                          : selectedArea === "West"
+                          ? "/images/layout-west.png"
+                          : "/images/layout-orf.png"
+                      }
+                      alt={`${selectedArea} Site Plot Plan Layout`}
                       width={1200}
                       height={800}
-                      className="w-full h-full object-contain rounded-lg border"
+                      className="w-full h-full object-contain rounded-lg border bg-white"
                       priority
                     />
 
@@ -711,7 +880,7 @@ function SitePlotPlans() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-sm font-medium text-gray-500">
                     Tipe Pekerjaan
@@ -731,14 +900,29 @@ function SitePlotPlans() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">
-                    Area/Zona
+                    Area Kerja
+                  </label>
+                  <div className="mt-1">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                      (selectedPoint.areaName || 'ORF') === 'ORF' ? 'bg-blue-100 text-blue-800' :
+                      (selectedPoint.areaName || 'ORF') === 'LSB' ? 'bg-purple-100 text-purple-800' :
+                      (selectedPoint.areaName || 'ORF') === 'East' ? 'bg-amber-100 text-amber-800' :
+                      'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {selectedPoint.areaName || 'ORF'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Zona Lokasi
                   </label>
                   <div className="flex items-center gap-2 mt-1">
                     <div
                       className="w-3 h-3 rounded-full"
                       style={{
                         backgroundColor:
-                          areaOptions.find(
+                          zoneOptions.find(
                             (a) => a.value === selectedPoint.zone
                           )?.color || "#6B7280",
                       }}
@@ -801,23 +985,6 @@ function SitePlotPlans() {
                   </div>
                 </div>
               </div>
-
-              {selectedPoint.riskLevel && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Risk Level
-                  </label>
-                  <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${
-                    selectedPoint.riskLevel === "High" 
-                      ? "bg-red-100 text-red-800"
-                      : selectedPoint.riskLevel === "Medium"
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-green-100 text-green-800"
-                  }`}>
-                    {selectedPoint.riskLevel}
-                  </div>
-                </div>
-              )}
             </div>
             ) : (
               <div className="text-center text-gray-500 py-12">

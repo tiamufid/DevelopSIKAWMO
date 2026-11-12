@@ -203,21 +203,15 @@ export default function ApprovalPanel({ permit, user, onApprove, onReject, onRef
         </h3>
         <div className="flex items-center space-x-2 mb-2">
           {getStatusBadge(permit.status)}
-          <span className="text-sm text-gray-600">
-            Risk Level: <span className={`font-semibold ${
-              permit.riskLevel === 'CRITICAL' ? 'text-red-600' :
-              permit.riskLevel === 'HIGH' ? 'text-orange-600' :
-              permit.riskLevel === 'MEDIUM' ? 'text-yellow-600' : 'text-green-600'
-            }`}>
-              {permit.riskLevel}
-            </span>
-          </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
           <h4 className="font-medium text-gray-900 mb-2">Work Details</h4>
+          <p className="text-sm text-gray-600 mb-1">
+            <strong>Area:</strong> <span className="font-semibold text-primary">{permit.areaName || 'ORF'}</span>
+          </p>
           <p className="text-sm text-gray-600 mb-1">
             <strong>Description:</strong> {permit.workDescription}
           </p>

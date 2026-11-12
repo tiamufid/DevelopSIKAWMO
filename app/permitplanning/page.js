@@ -14,6 +14,7 @@ function PermitPlanning() {
   const [showForm, setShowForm] = useState(false);
   const [editingPermit, setEditingPermit] = useState(null);
   const [selectedPermit, setSelectedPermit] = useState(null);
+  const [filterArea, setFilterArea] = useState('');
   const [filterZone, setFilterZone] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   
@@ -166,21 +167,8 @@ function PermitPlanning() {
     );
   };
 
-  const getRiskLevelBadge = (riskLevel) => {
-    const colors = {
-      LOW: 'bg-green-100 text-green-800',
-      MEDIUM: 'bg-yellow-100 text-yellow-800',
-      HIGH: 'bg-red-100 text-red-800'
-    };
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[riskLevel] || 'bg-gray-100 text-gray-800'}`}>
-        {riskLevel}
-      </span>
-    );
-  };
-
   const filteredPermits = permits.filter(permit => {
+    if (filterArea && (permit.areaName || 'ORF') !== filterArea) return false;
     if (filterZone && permit.zone !== filterZone) return false;
     if (filterStatus) {
       // Handle grouped status filtering for better UX
@@ -222,7 +210,21 @@ function PermitPlanning() {
         {/* Filters */}
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
           <div className="flex flex-wrap gap-6 items-end">
-            <div className="min-w-48">
+            <div className="min-w-44">
+              <label className="block text-sm font-semibold text-quaternary mb-2">Filter by Area</label>
+              <select
+                value={filterArea}
+                onChange={(e) => setFilterArea(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors font-medium"
+              >
+                <option value="">All Areas (4 Area)</option>
+                <option value="ORF">ORF (Onshore Receiving Facility)</option>
+                <option value="LSB">LSB (Logistic Supply Base)</option>
+                <option value="East">East (Offshore Timur)</option>
+                <option value="West">West (Offshore Barat)</option>
+              </select>
+            </div>
+            <div className="min-w-44">
               <label className="block text-sm font-semibold text-quaternary mb-2">Filter by Zone</label>
               <select
                 value={filterZone}
@@ -262,11 +264,12 @@ function PermitPlanning() {
               <option value="EXPIRED">Expired</option>
             </select>
           </div>
-          {(filterZone || filterStatus) && (
+          {(filterArea || filterZone || filterStatus) && (
             <div className="flex items-end">
               <Button
                 variant="secondary"
                 onClick={() => {
+                  setFilterArea('');
                   setFilterZone('');
                   setFilterStatus('');
                 }}
@@ -378,15 +381,22 @@ function PermitPlanning() {
                           <div className="text-sm text-gray-500 truncate max-w-xs">
                             {permit.workDescription}
                           </div>
-                          <div className="mt-1">
-                            {getRiskLevelBadge(permit.riskLevel)}
-                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{permit.zone}</div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                            (permit.areaName || 'ORF') === 'ORF' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                            (permit.areaName || 'ORF') === 'LSB' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                            (permit.areaName || 'ORF') === 'East' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                            'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {permit.areaName || 'ORF'}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">{permit.zone}</span>
+                        </div>
                         {permit.coordinates && (
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs text-gray-500">
                             Coords: {permit.coordinates}
                           </div>
                         )}
@@ -493,9 +503,6 @@ function PermitPlanning() {
                           );
                         })()}
                       </div>
-                    </div>
-                    <div>
-                      <strong>Risk Level:</strong> {getRiskLevelBadge(selectedPermit.riskLevel)}
                     </div>
                     <div>
                       <strong>Zone:</strong> 
