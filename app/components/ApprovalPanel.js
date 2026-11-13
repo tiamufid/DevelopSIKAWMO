@@ -186,7 +186,8 @@ export default function ApprovalPanel({ permit, user, onApprove, onReject, onRef
       'AA': 'Area Authority',
       'SC': 'Site Controller',
       'CC': 'Company Controller',
-      'ADMIN': 'Administrator'
+      'ADMIN': 'Administrator',
+      'PA': 'Performing Authority'
     };
     return roles[role] || role;
   };

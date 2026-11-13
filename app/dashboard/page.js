@@ -88,7 +88,8 @@ function Dashboard({ user }) {
       'AA': 'Area Authority',
       'SC': 'Site Controller',
       'CC': 'Company Controller',
-      'ADMIN': 'Administrator'
+      'ADMIN': 'Administrator',
+      'PA': 'Performing Authority'
     };
     return roles[role] || role;
   };
@@ -96,6 +97,7 @@ function Dashboard({ user }) {
   const getStatusBadge = (status) => {
     const statusConfig = {
       'DRAFT': { color: 'bg-gray-500', text: 'Draft' },
+      'PENDING_PTWC': { color: 'bg-purple-600', text: 'Pending PTWC' },
       'PENDING_AA_APPROVAL': { color: 'bg-yellow-500', text: 'Pending AA' },
       'PENDING_SC_APPROVAL': { color: 'bg-blue-500', text: 'Pending SC' },
       'AA_APPROVED': { color: 'bg-quaternary', text: 'AA Approved' },
@@ -354,7 +356,7 @@ function Dashboard({ user }) {
                 Quick Actions
               </h3>
               <div className="space-y-3">
-                {user?.role === 'PTWC' && (
+                {(user?.role === 'PTWC' || user?.role === 'PA') && (
                   <button
                     onClick={() => router.push('/permitplanning')}
                     className="w-full flex items-center px-4 py-3 text-sm bg-primary text-white rounded-lg hover:from-primary/90 hover:to-primary/70 transition-all transform hover:scale-105 shadow-md"
@@ -403,7 +405,7 @@ function Dashboard({ user }) {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    {dashboardData?.role === 'PTWC' ? 'My Permits' :
+                    {dashboardData?.role === 'PTWC' || dashboardData?.role === 'PA' ? 'My Permits' :
                      dashboardData?.role === 'AA' ? 'Permits Awaiting AA Approval' :
                      dashboardData?.role === 'SC' ? 'Permits Awaiting SC Approval' :
                      dashboardData?.role === 'CC' ? 'Permits Awaiting CC Approval' :
@@ -552,7 +554,7 @@ function Dashboard({ user }) {
                       </svg>
                       <p className="text-gray-500 text-lg">No permits found</p>
                       <p className="text-gray-400 text-sm mb-4">Create your first permit to get started</p>
-                      {user?.role === 'PTWC' && (
+                      {(user?.role === 'PTWC' || user?.role === 'PA') && (
                         <button
                           onClick={() => router.push('/permitplanning')}
                           className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors"

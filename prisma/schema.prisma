@@ -32,6 +32,7 @@ model User {
   aaApprovals            PermitPlanning[] @relation("AAApprovals")
   scApprovals            PermitPlanning[] @relation("SCApprovals")
   rejections             PermitPlanning[] @relation("Rejections")
+  ptwcAssignments        PermitPlanning[] @relation("PTWCAssignments")
 
   @@map("users")
 }
@@ -86,6 +87,12 @@ model PermitPlanning {
   safetyMeasures   String?  @map("safety_measures") @db.Text
   emergencyContact String?  @map("emergency_contact") @db.VarChar(255)
   relatedDocuments String?  @map("related_documents") @db.Text // JSON string
+
+  // PTW form fields
+  equipmentIdentity String? @map("equipment_identity") @db.VarChar(255) // Identitas/no. peralatan
+  simpleIsolation   Boolean @default(false) @map("simple_isolation")
+  sanctionToTest    Boolean @default(false) @map("sanction_to_test")
+  gasMeasurement    String? @map("gas_measurement") @db.Text // JSON string
   
   // Status
   status           PermitStatus @default(DRAFT)
@@ -103,6 +110,10 @@ model PermitPlanning {
   rejectedAt       DateTime? @map("rejected_at")
   rejectionReason  String?   @map("rejection_reason") @db.Text
   
+  // PTWC assignment tracking (for PA workflow)
+  ptwcAssignedBy   Int?      @map("ptwc_assigned_by")
+  ptwcAssignedAt   DateTime? @map("ptwc_assigned_at")
+  
   // Legacy approval fields (for backward compatibility)
   approvedBy       String?  @map("approved_by") @db.VarChar(255)
   approvedAt       DateTime? @map("approved_at")
@@ -116,6 +127,7 @@ model PermitPlanning {
   aaApprover User? @relation("AAApprovals", fields: [aaApprovedBy], references: [id])
   scApprover User? @relation("SCApprovals", fields: [scApprovedBy], references: [id])
   rejector   User? @relation("Rejections", fields: [rejectedBy], references: [id])
+  ptwcAssigner User? @relation("PTWCAssignments", fields: [ptwcAssignedBy], references: [id])
 
   @@map("permit_planning")
 }
@@ -146,6 +158,7 @@ enum Role {
   PTWC     // Permit to Work Controller - membuat permit
   AA       // Area Authority - approve permit
   SC       // Site Controller - approve permit
+  PA       // Performing Authority - pelaksana pekerjaan
 
   @@map("role")
 }
@@ -191,6 +204,7 @@ enum RiskLevel {
 
 enum PermitStatus {
   DRAFT
+  PENDING_PTWC        // Submitted by PA, waiting for PTWC to assign number
   SUBMITTED           // Submit oleh PTWC
   PENDING_AA_APPROVAL // Menunggu approval dari AA
   PENDING_SC_APPROVAL // Menunggu approval dari SC (setelah AA approve)

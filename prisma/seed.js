@@ -83,6 +83,16 @@ async function main() {
     },
   })
 
+  const paPassword = await bcrypt.hash('pawmo2027', 10)
+  const pa1 = await prisma.user.create({
+    data: {
+      name: 'Performing Authority',
+      email: 'PA@sika.com',
+      password: paPassword,
+      role: 'PA',
+    },
+  })
+
   const userPassword = await bcrypt.hash('user123', 10)
   const user1 = await prisma.user.create({
     data: {
@@ -483,6 +493,7 @@ async function main() {
   console.log('📧 Main Users:')
   console.log('   - Admin: admin@sika.com / admin123')
   console.log('   - PTWC: ptwc@sika.com / ptwc123')
+  console.log('   - PA: PA@sika.com / pawmo2027')
   console.log('   - AA: aa@sika.com / aa123')
   console.log('   - SC: sc@sika.com / sc123')
   console.log('📧 Test Users:')

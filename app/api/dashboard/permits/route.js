@@ -22,6 +22,11 @@ export async function GET(request) {
         dashboardData = await getPTWCDashboard(parseInt(userId));
         break;
       
+      case 'PA':
+        // PA melihat permits yang mereka buat
+        dashboardData = await getPADashboard(parseInt(userId));
+        break;
+      
       case 'AA':
         // AA melihat permits yang menunggu approval mereka
         dashboardData = await getAADashboard();
@@ -93,6 +98,43 @@ async function getPTWCDashboard(userId) {
     stats,
     role: 'PTWC',
     title: 'PTWC Dashboard - My Permits'
+  };
+}
+
+// Dashboard untuk PA
+async function getPADashboard(userId) {
+  const permits = await prisma.permitPlanning.findMany({
+    where: { userId },
+    include: {
+      aaApprover: {
+        select: { id: true, name: true, email: true }
+      },
+      scApprover: {
+        select: { id: true, name: true, email: true }
+      },
+      rejector: {
+        select: { id: true, name: true, email: true }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const stats = {
+    total: permits.length,
+    draft: permits.filter(p => p.status === 'DRAFT').length,
+    pendingPTWC: permits.filter(p => p.status === 'PENDING_PTWC').length,
+    pendingAA: permits.filter(p => p.status === 'PENDING_AA_APPROVAL').length,
+    pendingSC: permits.filter(p => p.status === 'PENDING_SC_APPROVAL').length,
+    fullyApproved: permits.filter(p => p.status === 'FULLY_APPROVED').length,
+    active: permits.filter(p => p.status === 'ACTIVE').length,
+    rejected: permits.filter(p => p.status.includes('REJECTED')).length
+  };
+
+  return {
+    permits,
+    stats,
+    role: 'PA',
+    title: 'PA Dashboard - My Permits'
   };
 }
 

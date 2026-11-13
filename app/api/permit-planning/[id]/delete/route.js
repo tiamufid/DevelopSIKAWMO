@@ -42,7 +42,7 @@ export async function DELETE(request, { params }) {
       }, { status: 404 });
     }
 
-    // Hanya permit owner (PTWC) atau admin yang bisa delete
+    // Hanya permit owner (PTWC/PA) atau admin yang bisa delete
     if (permit.userId !== parseInt(userId) && user.role !== 'ADMIN') {
       return Response.json({
         success: false,
@@ -50,11 +50,11 @@ export async function DELETE(request, { params }) {
       }, { status: 403 });
     }
 
-    // Hanya PTWC atau ADMIN yang bisa delete permit
-    if (user.role !== 'PTWC' && user.role !== 'ADMIN') {
+    // Hanya PTWC, PA, atau ADMIN yang bisa delete permit
+    if (user.role !== 'PTWC' && user.role !== 'ADMIN' && user.role !== 'PA') {
       return Response.json({
         success: false,
-        message: 'Only PTWC can delete permits'
+        message: 'Only PTWC, PA, or ADMIN can delete permits'
       }, { status: 403 });
     }
 

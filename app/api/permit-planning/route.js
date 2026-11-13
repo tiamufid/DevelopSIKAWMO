@@ -86,6 +86,10 @@ export async function POST(request) {
       safetyMeasures,
       relatedDocuments,
       coordinates,
+      equipmentIdentity,
+      simpleIsolation,
+      sanctionToTest,
+      gasMeasurement,
       status = 'DRAFT',
       userId
     } = body;
@@ -110,32 +114,42 @@ export async function POST(request) {
       }, { status: 404 });
     }
 
-    // Hanya PTWC yang bisa membuat permit
-    if (user.role !== 'PTWC' && user.role !== 'ADMIN') {
+    // Hanya PTWC, PA, atau ADMIN yang bisa membuat permit
+    if (user.role !== 'PTWC' && user.role !== 'ADMIN' && user.role !== 'PA') {
       return Response.json({
         success: false,
-        message: 'Only PTWC (Permit to Work Controller) can create permits'
+        message: 'Only PTWC or PA can create permits'
       }, { status: 403 });
     }
 
-    // Use permit number from request body instead of generating automatically
-    if (!permitNumber || permitNumber.trim() === '') {
-      return Response.json({
-        success: false,
-        message: 'Permit number is required'
-      }, { status: 400 });
-    }
-
-    // Check if permit number already exists
-    const existingPermit = await prisma.permitPlanning.findFirst({
-      where: { permitNumber: permitNumber.trim() }
-    });
-
-    if (existingPermit) {
-      return Response.json({
-        success: false,
-        message: 'Permit number already exists. Please use a different permit number.'
-      }, { status: 400 });
+    // PA doesn't need permit number upfront (assigned by PTWC later)
+    if (user.role === 'PTWC' || user.role === 'ADMIN') {
+      if (!permitNumber || permitNumber.trim() === '') {
+        return Response.json({
+          success: false,
+          message: 'Permit number is required for PTWC'
+        }, { status: 400 });
+      }
+      // Check if permit number already exists
+      const existingPermit = await prisma.permitPlanning.findFirst({
+        where: { permitNumber: permitNumber.trim() }
+      });
+      if (existingPermit) {
+        return Response.json({
+          success: false,
+          message: 'Permit number already exists. Please use a different permit number.'
+        }, { status: 400 });
+      }
+    } else if (user.role === 'PA' && permitNumber && permitNumber.trim() !== '') {
+      const existingPermit = await prisma.permitPlanning.findFirst({
+        where: { permitNumber: permitNumber.trim() }
+      });
+      if (existingPermit) {
+        return Response.json({
+          success: false,
+          message: 'Permit number already exists. Please use a different permit number.'
+        }, { status: 400 });
+      }
     }
 
     // Parse coordinates if provided
@@ -164,7 +178,7 @@ export async function POST(request) {
     // Buat permit planning baru
     const permit = await prisma.permitPlanning.create({
       data: {
-        permitNumber,
+        permitNumber: (user.role === 'PA') ? (permitNumber && permitNumber.trim() !== '' ? permitNumber.trim() : null) : permitNumber.trim(),
         workDescription: workDescription.trim(),
         workLocation: zone, // Use zone as work location
         areaName: areaName || 'ORF',
@@ -180,7 +194,11 @@ export async function POST(request) {
         siteControllerName: siteControllerName || null,
         safetyMeasures: safetyMeasures || null,
         relatedDocuments: relatedDocuments ? JSON.stringify(relatedDocuments) : null,
-        status: status || 'DRAFT',
+        equipmentIdentity: equipmentIdentity || null,
+        simpleIsolation: simpleIsolation || false,
+        sanctionToTest: sanctionToTest || false,
+        gasMeasurement: gasMeasurement ? JSON.stringify(gasMeasurement) : null,
+        status: (user.role === 'PA') ? 'DRAFT' : (status || 'DRAFT'),
         userId: parseInt(userId)
       },
       include: {

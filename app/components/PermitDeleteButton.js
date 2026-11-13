@@ -11,8 +11,8 @@ export default function PermitDeleteButton({ permit, user, onDelete, hideNotific
   const canDelete = () => {
     if (!user || !permit) return false;
     
-    // Hanya PTWC yang bisa delete permit miliknya sendiri atau admin
-    return (user.role === 'PTWC' && permit.userId === user.id) || user.role === 'ADMIN';
+    // Hanya PTWC, PA yang memiliki permit, atau admin yang bisa delete
+    return ((user.role === 'PTWC' || user.role === 'PA') && permit.userId === user.id) || user.role === 'ADMIN';
   };
 
   const handleDelete = async () => {

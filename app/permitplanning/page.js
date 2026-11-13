@@ -166,6 +166,7 @@ function PermitPlanning() {
   const getStatusBadge = (status) => {
     const colors = {
       DRAFT: 'bg-gray-500 text-white',
+      PENDING_PTWC: 'bg-purple-600 text-white',
       PENDING_AA_APPROVAL: 'bg-yellow-500 text-white',
       AA_APPROVED: 'bg-quaternary text-white',
       FULLY_APPROVED: 'bg-secondary text-white',
@@ -183,6 +184,7 @@ function PermitPlanning() {
     
     const statusLabels = {
       DRAFT: 'Draft',
+      PENDING_PTWC: 'Pending PTWC Review',
       PENDING_AA_APPROVAL: 'Pending AA',
       AA_APPROVED: 'AA Approved',
       FULLY_APPROVED: 'Fully Approved',
@@ -302,6 +304,7 @@ function PermitPlanning() {
             >
               <option value="">All Status</option>
               <option value="DRAFT">Draft</option>
+              <option value="PENDING_PTWC">Pending PTWC Review</option>
               <option value="PENDING_AA_APPROVAL">Pending AA Approval</option>
               <option value="AA_APPROVED">AA Approved</option>
               <option value="FULLY_APPROVED">Fully Approved</option>
@@ -410,7 +413,9 @@ function PermitPlanning() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {permit.permitNumber}
+                            {permit.permitNumber || (
+                              <span className="italic text-gray-400 font-normal">Pending PTWC Assignment</span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500 flex items-center gap-2">
                             {(() => {
@@ -856,7 +861,20 @@ function PermitPlanning() {
                 </div>
               </div>
               
-              <div className="mt-6 flex gap-2">
+              <div className="mt-6 flex gap-2 flex-wrap">
+                {['FULLY_APPROVED', 'ACTIVE', 'COMPLETED'].includes(selectedPermit.status) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(`/permitplanning/print/${selectedPermit.id}`, '_blank')}
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                    }
+                  >
+                    Print Permit
+                  </Button>
+                )}
                 <Button onClick={() => handleEdit(selectedPermit)}>
                   Edit Permit
                 </Button>

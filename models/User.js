@@ -55,8 +55,13 @@ export class UserModel {
 
   // Mendapatkan user dengan password (untuk authentication)
   static async getUserByEmailWithPassword(email) {
-    return await prisma.user.findUnique({
-      where: { email }
+    return await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email.trim(),
+          mode: 'insensitive'
+        }
+      }
     });
   }
 
@@ -138,8 +143,13 @@ export class UserModel {
 export class AuthModel {
   // Login user
   static async authenticateUser(email, password) {
-    const user = await prisma.user.findUnique({
-      where: { email }
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email.trim(),
+          mode: 'insensitive'
+        }
+      }
     });
 
     if (!user) {

@@ -9,8 +9,8 @@ export default function PermitSubmitButton({ permit, user, onSubmit, hideNotific
   const canSubmit = () => {
     if (!user || !permit) return false;
     
-    // Hanya PTWC yang bisa submit permit dengan status DRAFT
-    return (user.role === 'PTWC' || user.role === 'ADMIN') && 
+    // PTWC, ADMIN, atau PA bisa submit permit dengan status DRAFT miliknya
+    return (user.role === 'PTWC' || user.role === 'ADMIN' || user.role === 'PA') && 
            permit.status === 'DRAFT' && 
            permit.userId === user.id;
   };
@@ -18,16 +18,22 @@ export default function PermitSubmitButton({ permit, user, onSubmit, hideNotific
   const handleSubmit = async () => {
     if (!canSubmit()) return;
 
-    const confirmed = confirm(
-      'Are you sure you want to submit this permit for approval? ' +
-      'Once submitted, you cannot edit the permit until it is approved or rejected.'
-    );
+    const isPA = user.role === 'PA';
+    const message = isPA
+      ? 'Are you sure you want to submit this permit to PTWC for review?'
+      : 'Are you sure you want to submit this permit for approval? Once submitted, you cannot edit the permit until it is approved or rejected.';
+
+    const confirmed = confirm(message);
 
     if (!confirmed) return;
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/permit-planning/${permit.id}/submit`, {
+      const endpoint = isPA
+        ? `/api/permit-planning/${permit.id}/submit-to-ptwc`
+        : `/api/permit-planning/${permit.id}/submit`;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,7 +49,7 @@ export default function PermitSubmitButton({ permit, user, onSubmit, hideNotific
         if (!hideNotification) {
           setNotification({
             show: true,
-            message: 'Permit submitted for AA approval successfully!',
+            message: isPA ? 'Permit submitted to PTWC successfully!' : 'Permit submitted for AA approval successfully!',
             type: 'success'
           });
         }
@@ -82,7 +88,7 @@ export default function PermitSubmitButton({ permit, user, onSubmit, hideNotific
         disabled={loading}
         className="bg-blue-600 hover:bg-blue-700"
       >
-        {loading ? 'Submitting...' : 'Submit for Approval'}
+        {loading ? 'Submitting...' : (user.role === 'PA' ? 'Submit to PTWC' : 'Submit for Approval')}
       </Button>
 
       {/* Notification Toast - Only show if not hidden by parent */}

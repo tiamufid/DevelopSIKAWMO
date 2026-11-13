@@ -33,15 +33,30 @@ export default function PermitPlanningForm({
     company: "",
     areaAuthority: "",
     siteControllerName: "",
-    safetyMeasures: "",
-    ppeRequired: "", // Change from equipmentNeeded to ppeRequired
-    emergencyContact: "", // Change from emergencyProcedure to emergencyContact
+    equipmentIdentity: "",
+    simpleIsolation: false,
+    sanctionToTest: false,
+    gasMeasurement: {
+      initial: false,
+      continuous: false,
+      periodic: false,
+      periodicInterval: "",
+      gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
+    },
     status: "DRAFT",
     relatedDocuments: {
-      jsa: { checked: false, number: "" },
       ra: { checked: false, number: "" },
-      csep: { checked: false, number: "" },
+      jsa: { checked: false, number: "" },
       icc: { checked: false, number: "" },
+      csep: { checked: false, number: "" },
+      sdiSldkb: { checked: false, number: "" },
+      swc: { checked: false, number: "" },
+      workProcedure: { checked: false, number: "" },
+      excavationCert: { checked: false, number: "" },
+      liftingPlan: { checked: false, number: "" },
+      rp3k: { checked: false, number: "" },
+      gasTestRecord: { checked: false, number: "" },
+      dispensasi: { checked: false, number: "" },
       tkiTko: { checked: false, number: "" },
       other: { checked: false, number: "" },
     },
@@ -51,6 +66,24 @@ export default function PermitPlanningForm({
   const [errors, setErrors] = useState({});
   const [submittingForApproval, setSubmittingForApproval] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      setCurrentUser(userData);
+      if (userData?.role === "PA" && !formData.performingAuthority && !editData) {
+        setFormData((prev) => ({
+          ...prev,
+          performingAuthority: userData.name || "Performing Authority",
+        }));
+      }
+    } catch (error) {
+      console.error("Error reading user from localStorage:", error);
+    }
+  }, [editData]);
+
+  const isPA = currentUser?.role === "PA";
 
   // Hierarchical location state (Area -> Facility -> Deck)
   const [selectedArea, setSelectedArea] = useState("ORF");
@@ -128,6 +161,24 @@ export default function PermitPlanningForm({
     { value: "HOT_WORK_FLAME", label: "Hot Work", color: "red" },
   ];
 
+  // Document types matching the PTW permit pack checklist (left & right columns)
+  const DOCUMENT_TYPES = [
+    { key: "ra", label: "Risk Assessment (RA)", placeholder: "Enter RA document number" },
+    { key: "jsa", label: "Job Safety Analysis (JSA)", placeholder: "Enter JSA document number" },
+    { key: "icc", label: "Isolation Confirmation Certificate (ICC)", placeholder: "Enter ICC document number" },
+    { key: "csep", label: "Confined Space Entry Permit (CSEP)", placeholder: "Enter CSEP document number" },
+    { key: "sdiSldkb", label: "SDS / LDKB", placeholder: "Enter SDS/LDKB document number" },
+    { key: "swc", label: "Safe Work Certificate (SWC)", placeholder: "Enter SWC document number" },
+    { key: "workProcedure", label: "Prosedur kerja", placeholder: "Enter work procedure document number" },
+    { key: "excavationCert", label: "Excavation certificate", placeholder: "Enter excavation certificate number" },
+    { key: "liftingPlan", label: "Lifting plan", placeholder: "Enter lifting plan document number" },
+    { key: "rp3k", label: "RP3K", placeholder: "Enter RP3K document number" },
+    { key: "gasTestRecord", label: "Gas test record", placeholder: "Enter gas test record number" },
+    { key: "dispensasi", label: "Persetujuan dispensasi", placeholder: "Enter dispensasi approval number" },
+    { key: "tkiTko", label: "TKI / TKO", placeholder: "Enter TKI/TKO document number" },
+    { key: "other", label: "Lain-lain (Other)", placeholder: "Enter other document number/title" },
+  ];
+
   // Function to normalize coordinates to "x,y" format
   const normalizeCoordinates = (coords) => {
     if (!coords) return "";
@@ -174,14 +225,11 @@ export default function PermitPlanningForm({
       setSelectedDeck(locInfo.deckId || "DEFAULT");
 
       // Parse relatedDocuments if it's a string (from database)
-      let parsedRelatedDocuments = {
-        jsa: { checked: false, number: "" },
-        ra: { checked: false, number: "" },
-        csep: { checked: false, number: "" },
-        icc: { checked: false, number: "" },
-        tkiTko: { checked: false, number: "" },
-        other: { checked: false, number: "" },
-      };
+      const emptyDocuments = {};
+      DOCUMENT_TYPES.forEach((doc) => {
+        emptyDocuments[doc.key] = { checked: false, number: "" };
+      });
+      let parsedRelatedDocuments = emptyDocuments;
 
       if (editData.relatedDocuments) {
         try {
@@ -228,9 +276,27 @@ export default function PermitPlanningForm({
         company: editData.company || "",
         areaAuthority: editData.areaAuthority || "",
         siteControllerName: editData.siteControllerName || "",
-        safetyMeasures: editData.safetyMeasures || "",
-        ppeRequired: editData.ppeRequired || editData.equipmentNeeded || "",
-        emergencyContact: editData.emergencyContact || editData.emergencyProcedure || "",
+        equipmentIdentity: editData.equipmentIdentity || "",
+        simpleIsolation: editData.simpleIsolation || false,
+        sanctionToTest: editData.sanctionToTest || false,
+        gasMeasurement: (() => {
+          const defaults = {
+            initial: false,
+            continuous: false,
+            periodic: false,
+            periodicInterval: "",
+            gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
+          };
+          if (!editData.gasMeasurement) return defaults;
+          try {
+            const parsed = typeof editData.gasMeasurement === "string"
+              ? JSON.parse(editData.gasMeasurement)
+              : editData.gasMeasurement;
+            return { ...defaults, ...parsed, gases: { ...defaults.gases, ...(parsed.gases || {}) } };
+          } catch {
+            return defaults;
+          }
+        })(),
         status: editData.status || "DRAFT",
         relatedDocuments: parsedRelatedDocuments,
       });
@@ -276,6 +342,23 @@ export default function PermitPlanningForm({
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
+  };
+
+  const handleGasMeasurementChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      gasMeasurement: { ...prev.gasMeasurement, [field]: value },
+    }));
+  };
+
+  const handleGasTypeChange = (gas, checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      gasMeasurement: {
+        ...prev.gasMeasurement,
+        gases: { ...prev.gasMeasurement.gases, [gas]: checked },
+      },
+    }));
   };
 
   const handleRelatedDocumentChange = (docType, field, value) => {
@@ -337,7 +420,7 @@ export default function PermitPlanningForm({
       console.error("Error parsing user data from localStorage:", error);
     }
 
-    if (!formData.permitNumber) newErrors.permitNumber = "Permit number is required";
+    if (!isPA && !formData.permitNumber) newErrors.permitNumber = "Permit number is required";
     if (!formData.workType) newErrors.workType = "Work type is required";
     if (!formData.workDescription)
       newErrors.workDescription = "Work description is required";
@@ -454,15 +537,30 @@ export default function PermitPlanningForm({
             company: "",
             areaAuthority: "",
             siteControllerName: "",
-            safetyMeasures: "",
-            ppeRequired: "",
-            emergencyContact: "",
+            equipmentIdentity: "",
+            simpleIsolation: false,
+            sanctionToTest: false,
+            gasMeasurement: {
+              initial: false,
+              continuous: false,
+              periodic: false,
+              periodicInterval: "",
+              gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
+            },
             status: "DRAFT",
             relatedDocuments: {
-              jsa: { checked: false, number: "" },
               ra: { checked: false, number: "" },
-              csep: { checked: false, number: "" },
+              jsa: { checked: false, number: "" },
               icc: { checked: false, number: "" },
+              csep: { checked: false, number: "" },
+              sdiSldkb: { checked: false, number: "" },
+              swc: { checked: false, number: "" },
+              workProcedure: { checked: false, number: "" },
+              excavationCert: { checked: false, number: "" },
+              liftingPlan: { checked: false, number: "" },
+              rp3k: { checked: false, number: "" },
+              gasTestRecord: { checked: false, number: "" },
+              dispensasi: { checked: false, number: "" },
               tkiTko: { checked: false, number: "" },
               other: { checked: false, number: "" },
             },
@@ -492,7 +590,12 @@ export default function PermitPlanningForm({
         return;
       }
 
-      const response = await fetch(`/api/permit-planning/${permitId}/submit`, {
+      const isUserPA = user.role === "PA";
+      const endpoint = isUserPA
+        ? `/api/permit-planning/${permitId}/submit-to-ptwc`
+        : `/api/permit-planning/${permitId}/submit`;
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -505,18 +608,20 @@ export default function PermitPlanningForm({
       if (result.success) {
         setNotification({
           show: true,
-          message: "Permit submitted for AA approval successfully!",
+          message: isUserPA
+            ? "Permit submitted to PTWC successfully!"
+            : "Permit submitted for AA approval successfully!",
           type: "success"
         });
         if (onSubmitSuccess) {
           onSubmitSuccess(result.data);
         }
       } else {
-        setErrors({ submit: result.message || "Failed to submit permit for approval" });
+        setErrors({ submit: result.message || "Failed to submit permit" });
       }
     } catch (error) {
-      console.error("Error submitting permit for approval:", error);
-      setErrors({ submit: "Failed to submit permit for approval. Please try again." });
+      console.error("Error submitting permit:", error);
+      setErrors({ submit: "Failed to submit permit. Please try again." });
     } finally {
       setSubmittingForApproval(false);
     }
@@ -593,13 +698,13 @@ export default function PermitPlanningForm({
           </div>
 
           <Input
-            label="Permit Number *"
+            label={isPA ? "Permit Number (Optional - assigned by PTWC)" : "Permit Number *"}
             name="permitNumber"
             value={formData.permitNumber}
             onChange={handleChange}
-            placeholder="Enter unique permit number (e.g., WP-2025-001)"
+            placeholder={isPA ? "Optional - assigned by PTWC (e.g., WP-2025-001)" : "Enter unique permit number (e.g., WP-2025-001)"}
             error={errors.permitNumber}
-            required
+            required={!isPA}
           />
 
         </div>
@@ -628,6 +733,114 @@ export default function PermitPlanningForm({
             error={errors.workLocation}
           />
         </div>
+
+        <div>
+          <Input
+            label="Identitas / No. Peralatan (Equipment Identity)"
+            name="equipmentIdentity"
+            value={formData.equipmentIdentity}
+            onChange={handleChange}
+            placeholder="Equipment identity / serial number"
+            error={errors.equipmentIdentity}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="simpleIsolation"
+              checked={formData.simpleIsolation}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, simpleIsolation: e.target.checked }))
+              }
+              className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+            />
+            <span className="text-sm font-medium text-quaternary">Simple isolation</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="sanctionToTest"
+              checked={formData.sanctionToTest}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, sanctionToTest: e.target.checked }))
+              }
+              className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+            />
+            <span className="text-sm font-medium text-quaternary">Sanction to test</span>
+          </label>
+        </div>
+
+        {/* Gas Measurement */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-quaternary mb-3">Pengukuran Gas (Gas Measurement)</h4>
+          <div className="flex flex-wrap gap-6 mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.gasMeasurement.initial}
+                onChange={(e) => handleGasMeasurementChange("initial", e.target.checked)}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-700">Pengukuran gas awal / initial gas testing</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.gasMeasurement.continuous}
+                onChange={(e) => handleGasMeasurementChange("continuous", e.target.checked)}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-700">Pengukuran gas kontinu / continuous</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.gasMeasurement.periodic}
+                onChange={(e) => handleGasMeasurementChange("periodic", e.target.checked)}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-700">Pengukuran gas periodik setiap</span>
+              {formData.gasMeasurement.periodic && (
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.gasMeasurement.periodicInterval}
+                  onChange={(e) => handleGasMeasurementChange("periodicInterval", e.target.value)}
+                  placeholder="jam"
+                  className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                />
+              )}
+              <span className="text-sm text-gray-700">jam</span>
+            </label>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-600 mb-2">Pengukuran gas yang diperlukan:</p>
+            <div className="flex flex-wrap gap-4">
+              {[
+                { key: "lel", label: "LEL" },
+                { key: "o2", label: "O2" },
+                { key: "h2s", label: "H2S" },
+                { key: "co", label: "CO" },
+                { key: "voc", label: "VOC" },
+                { key: "benzene", label: "Benzene" },
+                { key: "so2", label: "SO2" },
+                { key: "co2", label: "CO2" },
+              ].map((gas) => (
+                <label key={gas.key} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.gasMeasurement.gases[gas.key]}
+                    onChange={(e) => handleGasTypeChange(gas.key, e.target.checked)}
+                    className="w-3.5 h-3.5 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <span className="text-sm text-gray-700">{gas.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
         {/* Related Documents Permit */}
@@ -636,303 +849,51 @@ export default function PermitPlanningForm({
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Related Documents Permit
+            2. Dokumen Permit Pack (diisi oleh PA dan ditinjau oleh AA)
           </h3>
 
-          <div className="space-y-4">
-            {/* Job Safety Analysis (JSA) */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="jsa"
-                  checked={formData.relatedDocuments.jsa.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "jsa",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            {DOCUMENT_TYPES.map((doc) => (
+              <div key={doc.key} className="flex items-start gap-3">
+                <div className="flex items-center pt-1">
+                  <input
+                    type="checkbox"
+                    id={doc.key}
+                    checked={formData.relatedDocuments[doc.key]?.checked || false}
+                    onChange={(e) =>
+                      handleRelatedDocumentChange(doc.key, "checked", e.target.checked)
+                    }
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label
+                    htmlFor={doc.key}
+                    className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
+                  >
+                    {doc.label}
+                  </label>
+                  {formData.relatedDocuments[doc.key]?.checked && (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder={doc.placeholder}
+                        value={formData.relatedDocuments[doc.key]?.number || ""}
+                        onChange={(e) =>
+                          handleRelatedDocumentChange(doc.key, "number", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      />
+                      {errors[`relatedDocuments.${doc.key}`] && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors[`relatedDocuments.${doc.key}`]}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="jsa"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  Job Safety Analysis (JSA)
-                </label>
-                {formData.relatedDocuments.jsa.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter JSA document number/title"
-                      value={formData.relatedDocuments.jsa.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "jsa",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.jsa"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.jsa"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Risk Assessment (RA) */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="ra"
-                  checked={formData.relatedDocuments.ra.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "ra",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="ra"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  Risk Assessment (RA)
-                </label>
-                {formData.relatedDocuments.ra.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter RA document number/title"
-                      value={formData.relatedDocuments.ra.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "ra",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.ra"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.ra"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Confined Space Entry Permit (CSEP) */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="csep"
-                  checked={formData.relatedDocuments.csep.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "csep",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="csep"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  Confined Space Entry Permit (CSEP)
-                </label>
-                {formData.relatedDocuments.csep.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter CSEP document number/title"
-                      value={formData.relatedDocuments.csep.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "csep",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.csep"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.csep"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Isolation Confirmation Certificate (ICC) */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="icc"
-                  checked={formData.relatedDocuments.icc.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "icc",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="icc"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  Isolation Confirmation Certificate (ICC)
-                </label>
-                {formData.relatedDocuments.icc.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter ICC document number/title"
-                      value={formData.relatedDocuments.icc.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "icc",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.icc"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.icc"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* TKI / TKO */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="tkiTko"
-                  checked={formData.relatedDocuments.tkiTko.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "tkiTko",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="tkiTko"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  TKI / TKO
-                </label>
-                {formData.relatedDocuments.tkiTko.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter TKI/TKO document number/title"
-                      value={formData.relatedDocuments.tkiTko.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "tkiTko",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.tkiTko"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.tkiTko"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Other */}
-            <div className="flex items-start gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="other"
-                  checked={formData.relatedDocuments.other.checked}
-                  onChange={(e) =>
-                    handleRelatedDocumentChange(
-                      "other",
-                      "checked",
-                      e.target.checked
-                    )
-                  }
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  htmlFor="other"
-                  className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                >
-                  Other
-                </label>
-                {formData.relatedDocuments.other.checked && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Enter other document number/title"
-                      value={formData.relatedDocuments.other.number}
-                      onChange={(e) =>
-                        handleRelatedDocumentChange(
-                          "other",
-                          "number",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    />
-                    {errors["relatedDocuments.other"] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors["relatedDocuments.other"]}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -1213,48 +1174,6 @@ export default function PermitPlanningForm({
           </div>
         </div>
 
-        {/* Safety Information */}
-        <div className="bg-primary/5 p-6 rounded-xl border border-primary/20">
-          <h3 className="text-lg font-semibold text-quaternary mb-4 flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            Safety Information
-          </h3>
-
-          <div className="space-y-4">
-            <Input
-              label="PPE Required / Equipment Needed"
-              name="ppeRequired"
-              value={formData.ppeRequired}
-              onChange={handleChange}
-              placeholder="List required Personal Protective Equipment and tools"
-              multiline
-              rows={2}
-            />
-
-            <Input
-              label="Safety Measures"
-              name="safetyMeasures"
-              value={formData.safetyMeasures}
-              onChange={handleChange}
-              placeholder="Describe safety precautions and procedures"
-              multiline
-              rows={3}
-            />
-
-            <Input
-              label="Emergency Contact"
-              name="emergencyContact"
-              value={formData.emergencyContact}
-              onChange={handleChange}
-              placeholder="Emergency contact person and phone number"
-              multiline
-              rows={2}
-            />
-          </div>
-        </div>
-
         {/* Error Display */}
         {errors.submit && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
@@ -1340,7 +1259,7 @@ export default function PermitPlanningForm({
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Submit for Approval
+                  {isPA ? "Submit to PTWC" : "Submit for Approval"}
                 </>
               )}
             </Button>

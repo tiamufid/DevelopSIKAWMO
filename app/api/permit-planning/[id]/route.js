@@ -14,10 +14,24 @@ export async function GET(request, { params }) {
             name: true,
             email: true
           }
+        },
+        aaApprover: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        scApprover: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
     });
-    
+
     if (!permit) {
       return Response.json({
         success: false,
@@ -96,6 +110,10 @@ export async function PUT(request, { params }) {
         ppeRequired: body.equipmentNeeded || body.ppeRequired,
         emergencyContact: body.emergencyProcedure || body.emergencyContact,
         relatedDocuments: body.relatedDocuments ? JSON.stringify(body.relatedDocuments) : null,
+        equipmentIdentity: body.equipmentIdentity,
+        simpleIsolation: body.simpleIsolation ?? existingPermit.simpleIsolation,
+        sanctionToTest: body.sanctionToTest ?? existingPermit.sanctionToTest,
+        gasMeasurement: body.gasMeasurement ? JSON.stringify(body.gasMeasurement) : existingPermit.gasMeasurement,
         coordinates: body.coordinates ? (typeof body.coordinates === 'string' ? body.coordinates : JSON.stringify(body.coordinates)) : null,
         status: body.status || existingPermit.status,
         updatedAt: new Date()
