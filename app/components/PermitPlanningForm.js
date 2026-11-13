@@ -33,9 +33,6 @@ export default function PermitPlanningForm({
     company: "",
     areaAuthority: "",
     siteControllerName: "",
-    safetyMeasures: "",
-    ppeRequired: "", // Change from equipmentNeeded to ppeRequired
-    emergencyContact: "", // Change from emergencyProcedure to emergencyContact
     status: "DRAFT",
     relatedDocuments: {
       jsa: { checked: false, number: "" },
@@ -228,9 +225,6 @@ export default function PermitPlanningForm({
         company: editData.company || "",
         areaAuthority: editData.areaAuthority || "",
         siteControllerName: editData.siteControllerName || "",
-        safetyMeasures: editData.safetyMeasures || "",
-        ppeRequired: editData.ppeRequired || editData.equipmentNeeded || "",
-        emergencyContact: editData.emergencyContact || editData.emergencyProcedure || "",
         status: editData.status || "DRAFT",
         relatedDocuments: parsedRelatedDocuments,
       });
@@ -454,9 +448,6 @@ export default function PermitPlanningForm({
             company: "",
             areaAuthority: "",
             siteControllerName: "",
-            safetyMeasures: "",
-            ppeRequired: "",
-            emergencyContact: "",
             status: "DRAFT",
             relatedDocuments: {
               jsa: { checked: false, number: "" },
@@ -1209,48 +1200,6 @@ export default function PermitPlanningForm({
               placeholder="Area authority"
               error={errors.areaAuthority}
               required
-            />
-          </div>
-        </div>
-
-        {/* Safety Information */}
-        <div className="bg-primary/5 p-6 rounded-xl border border-primary/20">
-          <h3 className="text-lg font-semibold text-quaternary mb-4 flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            Safety Information
-          </h3>
-
-          <div className="space-y-4">
-            <Input
-              label="PPE Required / Equipment Needed"
-              name="ppeRequired"
-              value={formData.ppeRequired}
-              onChange={handleChange}
-              placeholder="List required Personal Protective Equipment and tools"
-              multiline
-              rows={2}
-            />
-
-            <Input
-              label="Safety Measures"
-              name="safetyMeasures"
-              value={formData.safetyMeasures}
-              onChange={handleChange}
-              placeholder="Describe safety precautions and procedures"
-              multiline
-              rows={3}
-            />
-
-            <Input
-              label="Emergency Contact"
-              name="emergencyContact"
-              value={formData.emergencyContact}
-              onChange={handleChange}
-              placeholder="Emergency contact person and phone number"
-              multiline
-              rows={2}
             />
           </div>
         </div>
