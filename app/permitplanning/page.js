@@ -24,6 +24,7 @@ function PermitPlanning() {
   const [showCreateConfirm, setShowCreateConfirm] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchPermits();
@@ -125,6 +126,43 @@ function PermitPlanning() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const params = new URLSearchParams();
+      if (userData.id) params.set('userId', userData.id);
+      if (filterArea) params.set('area', filterArea);
+      if (filterZone) params.set('zone', filterZone);
+      if (filterStatus && !['APPROVED_ALL', 'REJECTED_ALL'].includes(filterStatus)) {
+        params.set('status', filterStatus);
+      }
+
+      const response = await fetch(`/api/permit-planning/export?${params.toString()}`);
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        showNotification(result?.message || 'Export failed. No permits match the current filters.', 'error');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Permit-Planning-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showNotification('Excel exported successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting permits:', error);
+      showNotification('Network error. Failed to export', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const colors = {
       DRAFT: 'bg-gray-500 text-white',
@@ -193,15 +231,28 @@ function PermitPlanning() {
             <h1 className="text-3xl font-bold text-quaternary">Work Permit Planning</h1>
             <p className="text-gray-600 mt-2">Manage work permits and visualize locations on site plot</p>
           </div>
-          <Button 
-            onClick={handleCreatePermit}
-            className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Create New Permit
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleExport}
+              disabled={exporting}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
+              </svg>
+              {exporting ? 'Exporting...' : 'Export to Excel'}
+            </Button>
+            <Button 
+              onClick={handleCreatePermit}
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create New Permit
+            </Button>
+          </div>
         </div>
       </div>
 
