@@ -302,6 +302,19 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+
+    // Hanya PTWC (dan ADMIN) yang boleh export.
+    if (!userId || userId === 'undefined') {
+      return Response.json({ success: false, message: 'User ID is required' }, { status: 400 });
+    }
+    const requester = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: { role: true },
+    });
+    if (!requester || !['PTWC', 'ADMIN'].includes(requester.role)) {
+      return Response.json({ success: false, message: 'Hanya PTWC yang boleh export permit.' }, { status: 403 });
+    }
+
     const status = searchParams.get('status');
     const zone = searchParams.get('zone');
     const area = searchParams.get('area') || searchParams.get('areaName');

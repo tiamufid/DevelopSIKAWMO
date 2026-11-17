@@ -270,17 +270,19 @@ function PermitPlanning() {
             <p className="text-gray-600 mt-2">Manage work permits and visualize locations on site plot</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={handleExport}
-              disabled={exporting}
-              variant="secondary"
-              className="flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
-              </svg>
-              {exporting ? 'Exporting...' : 'Export to Excel'}
-            </Button>
+            {['PTWC', 'ADMIN'].includes(currentUser?.role) && (
+              <Button
+                onClick={handleExport}
+                disabled={exporting}
+                variant="secondary"
+                className="flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
+                </svg>
+                {exporting ? 'Exporting...' : 'Export to Excel'}
+              </Button>
+            )}
             <Button 
               onClick={handleCreatePermit}
               className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
