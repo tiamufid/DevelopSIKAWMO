@@ -68,9 +68,6 @@ function DocumentCheck({
                 Nomor dokumen akan diisi oleh PTWC.
               </p>
             )}
-            {errors.criticalActivities && (
-              <p className="mt-2 text-sm text-red-600">{errors.criticalActivities}</p>
-            )}
           </div>
         )}
         {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
