@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { normalizeOtherDocumentEntries } from '@/lib/ptwForm';
 
 // GET - Mendapatkan semua permit planning
 export async function GET(request) {
@@ -141,7 +142,20 @@ export async function POST(request) {
           : { ...documentsForStorage };
         for (const [key, document] of Object.entries(documentsForStorage)) {
           if (document && typeof document === 'object') {
-            documentsForStorage[key] = { ...document, number: '' };
+            if (key === 'other') {
+              const entries = normalizeOtherDocumentEntries(document).map((entry) => ({
+                ...entry,
+                number: ''
+              }));
+              documentsForStorage[key] = {
+                ...document,
+                entries,
+                description: entries.map((entry) => entry.description).filter(Boolean).join(', '),
+                number: ''
+              };
+            } else {
+              documentsForStorage[key] = { ...document, number: '' };
+            }
           }
         }
       } catch {

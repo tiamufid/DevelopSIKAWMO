@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { normalizeOtherDocumentEntries } from '@/lib/ptwForm';
 
 // POST - Submit permit untuk approval (hanya PTWC)
 export async function POST(request, { params }) {
@@ -145,11 +146,21 @@ export async function POST(request, { params }) {
     }
 
     for (const [key, document] of Object.entries(documents)) {
-      if (key === 'other' && document?.checked && !String(document?.description || '').trim()) {
-        return Response.json({
-          success: false,
-          message: 'PA must specify the name of the other document'
-        }, { status: 400 });
+      if (key === 'other' && document?.checked) {
+        const entries = normalizeOtherDocumentEntries(document);
+        if (entries.some((entry) => !entry.description.trim())) {
+          return Response.json({
+            success: false,
+            message: 'PA must specify the name of every other document'
+          }, { status: 400 });
+        }
+        if (entries.some((entry) => !entry.number.trim())) {
+          return Response.json({
+            success: false,
+            message: 'PTWC must assign a number for every other document'
+          }, { status: 400 });
+        }
+        continue;
       }
       if (document?.checked && !String(document?.number || '').trim()) {
         return Response.json({

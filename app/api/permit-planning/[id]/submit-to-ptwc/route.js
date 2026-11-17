@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { normalizeOtherDocumentEntries } from '@/lib/ptwForm';
 
 export async function POST(request, { params }) {
   try {
@@ -91,10 +92,13 @@ export async function POST(request, { params }) {
       }
     }
 
-    if (documents.other?.checked && !String(documents.other.description || '').trim()) {
+    if (
+      documents.other?.checked &&
+      normalizeOtherDocumentEntries(documents.other).some((entry) => !entry.description.trim())
+    ) {
       return Response.json({
         success: false,
-        message: 'PA must specify the name of the other document'
+        message: 'PA must specify the name of every other document'
       }, { status: 400 });
     }
 

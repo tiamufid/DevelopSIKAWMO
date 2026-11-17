@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { normalizeOtherDocumentEntries } from '@/lib/ptwForm';
 
 // GET - Mendapatkan permit planning berdasarkan ID
 export async function GET(request, { params }) {
@@ -108,10 +109,24 @@ export async function PUT(request, { params }) {
       } catch {}
       for (const [key, document] of Object.entries(documentsForStorage)) {
         if (document && typeof document === 'object') {
-          documentsForStorage[key] = {
-            ...document,
-            number: existingDocuments[key]?.number || ''
-          };
+          if (key === 'other') {
+            const previousEntries = normalizeOtherDocumentEntries(existingDocuments[key]);
+            const entries = normalizeOtherDocumentEntries(document).map((entry, index) => ({
+              ...entry,
+              number: previousEntries[index]?.number || ''
+            }));
+            documentsForStorage[key] = {
+              ...document,
+              entries,
+              description: entries.map((entry) => entry.description).filter(Boolean).join(', '),
+              number: entries.map((entry) => entry.number).filter(Boolean).join(', ')
+            };
+          } else {
+            documentsForStorage[key] = {
+              ...document,
+              number: existingDocuments[key]?.number || ''
+            };
+          }
         }
       }
     } else if (canReviewPARequest && documentsForStorage) {
@@ -129,14 +144,32 @@ export async function PUT(request, { params }) {
       for (const key of documentKeys) {
         const existingDocument = existingDocuments[key] || {};
         const submittedDocument = documentsForStorage[key] || {};
-        documentsForStorage[key] = {
-          ...submittedDocument,
-          checked: Boolean(existingDocument.checked),
-          description: existingDocument.description || '',
-          number: existingDocument.checked
-            ? (submittedDocument.number || '')
-            : (existingDocument.number || '')
-        };
+        if (key === 'other') {
+          const existingEntries = normalizeOtherDocumentEntries(existingDocument);
+          const submittedEntries = normalizeOtherDocumentEntries(submittedDocument);
+          const entries = existingEntries.map((entry, index) => ({
+            ...entry,
+            number: existingDocument.checked
+              ? (submittedEntries[index]?.number || '')
+              : (entry.number || '')
+          }));
+          documentsForStorage[key] = {
+            ...submittedDocument,
+            checked: Boolean(existingDocument.checked),
+            entries,
+            description: entries.map((entry) => entry.description).filter(Boolean).join(', '),
+            number: entries.map((entry) => entry.number).filter(Boolean).join(', ')
+          };
+        } else {
+          documentsForStorage[key] = {
+            ...submittedDocument,
+            checked: Boolean(existingDocument.checked),
+            description: existingDocument.description || '',
+            number: existingDocument.checked
+              ? (submittedDocument.number || '')
+              : (existingDocument.number || '')
+          };
+        }
       }
     }
 

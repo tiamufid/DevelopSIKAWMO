@@ -5,12 +5,14 @@ function DocumentCheck({
   checked,
   number,
   error,
-  description = "",
+  otherEntries = [],
   descriptionError,
   required = false,
   onCheck,
   onNumber,
-  onDescription,
+  onOtherEntryChange,
+  onAddOtherEntry,
+  onRemoveOtherEntry,
   allowDescriptionEdit = false,
   canEditSelection = true,
   showNumberInput = true,
@@ -33,29 +35,69 @@ function DocumentCheck({
         </label>
         {checked && (
           <div className="mt-2">
-            {doc.key === "other" && (
+            {doc.key === "other" ? (
               <div className="mb-2">
-                {allowDescriptionEdit ? (
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => onDescription(e.target.value)}
-                    placeholder="Sebutkan nama/jenis dokumen lain"
-                    aria-label="Nama atau jenis dokumen lain"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  />
-                ) : (
-                  <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                    Jenis dokumen: {description || "Belum disebutkan oleh PA"}
-                  </p>
+                <div className="space-y-2">
+                  {otherEntries.map((entry, index) => (
+                    <div key={index} className="flex items-start gap-2">
+                      <div className="flex-1">
+                        {allowDescriptionEdit ? (
+                          <input
+                            type="text"
+                            value={entry.description}
+                            onChange={(e) => onOtherEntryChange(index, "description", e.target.value)}
+                            placeholder="Nama/jenis dokumen lain"
+                            aria-label={`Nama dokumen lain ${index + 1}`}
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                          />
+                        ) : (
+                          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                            {entry.description || "Belum disebutkan oleh PA"}
+                          </p>
+                        )}
+                        {showNumberInput ? (
+                          <input
+                            type="text"
+                            value={entry.number}
+                            onChange={(e) => onOtherEntryChange(index, "number", e.target.value)}
+                            placeholder={doc.placeholder}
+                            aria-label={`Nomor dokumen lain ${index + 1}`}
+                            className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                          />
+                        ) : (
+                          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mt-2">
+                            Nomor dokumen akan diisi oleh PTWC.
+                          </p>
+                        )}
+                      </div>
+                      {allowDescriptionEdit && otherEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveOtherEntry(index)}
+                          aria-label={`Hapus dokumen lain ${index + 1}`}
+                          className="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50"
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {allowDescriptionEdit && (
+                  <button
+                    type="button"
+                    onClick={onAddOtherEntry}
+                    className="mt-2 text-sm font-medium text-primary hover:underline"
+                  >
+                    + Tambah dokumen
+                  </button>
                 )}
                 {descriptionError && (
                   <p className="text-red-500 text-sm mt-1">{descriptionError}</p>
                 )}
               </div>
-            )}
-            {showNumberInput ? (
+            ) : showNumberInput ? (
               <input
                 type="text"
                 placeholder={doc.placeholder}
@@ -96,6 +138,7 @@ import {
   DOCUMENT_TYPES,
   emptyGasMeasurement,
   normalizeGasMeasurement,
+  normalizeOtherDocumentEntries,
   durationText,
 } from "@/lib/ptwForm";
 
@@ -138,7 +181,7 @@ export default function PermitPlanningForm({
       rp3k: { checked: false, number: "" },
       gasTestRecord: { checked: false, number: "" },
       dispensasi: { checked: false, number: "" },
-      other: { checked: false, number: "" },
+      other: { checked: false, description: "", number: "", entries: [{ description: "", number: "" }] },
     },
   });
 
@@ -309,7 +352,9 @@ export default function PermitPlanningForm({
       // Parse relatedDocuments if it's a string (from database)
       const emptyDocuments = {};
       DOCUMENT_TYPES.forEach((doc) => {
-        emptyDocuments[doc.key] = { checked: false, number: "" };
+        emptyDocuments[doc.key] = doc.key === "other"
+          ? { checked: false, description: "", number: "", entries: [{ description: "", number: "" }] }
+          : { checked: false, number: "" };
       });
       let parsedRelatedDocuments = emptyDocuments;
 
@@ -335,6 +380,14 @@ export default function PermitPlanningForm({
               parsedRelatedDocuments[newKey] = rawData[key];
             }
           });
+
+          const otherEntries = normalizeOtherDocumentEntries(parsedRelatedDocuments.other);
+          parsedRelatedDocuments.other = {
+            ...parsedRelatedDocuments.other,
+            entries: otherEntries,
+            description: otherEntries.map((entry) => entry.description).filter(Boolean).join(", "),
+            number: otherEntries.map((entry) => entry.number).filter(Boolean).join(", "),
+          };
           
           console.log("Parsed relatedDocuments:", parsedRelatedDocuments);
         } catch (error) {
@@ -452,6 +505,47 @@ export default function PermitPlanningForm({
     }));
   };
 
+  const updateOtherDocumentEntries = (updateEntries) => {
+    setFormData((prev) => {
+      const currentEntries = normalizeOtherDocumentEntries(prev.relatedDocuments.other);
+      const updatedEntries = typeof updateEntries === "function"
+        ? updateEntries(currentEntries)
+        : updateEntries;
+      const entries = updatedEntries.length > 0
+        ? updatedEntries
+        : [{ description: "", number: "" }];
+
+      return {
+        ...prev,
+        relatedDocuments: {
+          ...prev.relatedDocuments,
+          other: {
+            ...prev.relatedDocuments.other,
+            entries,
+            description: entries.map((entry) => entry.description).filter(Boolean).join(", "),
+            number: entries.map((entry) => entry.number).filter(Boolean).join(", "),
+          },
+        },
+      };
+    });
+  };
+
+  const handleOtherEntryChange = (index, field, value) => {
+    updateOtherDocumentEntries((entries) =>
+      entries.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, [field]: value } : entry
+      )
+    );
+  };
+
+  const addOtherDocumentEntry = () => {
+    updateOtherDocumentEntries((entries) => [...entries, { description: "", number: "" }]);
+  };
+
+  const removeOtherDocumentEntry = (index) => {
+    updateOtherDocumentEntries((entries) => entries.filter((_, entryIndex) => entryIndex !== index));
+  };
+
   const validateCoordinates = (coords) => {
     if (!coords) return false;
 
@@ -539,10 +633,16 @@ export default function PermitPlanningForm({
       if (requiredDocumentKeys.has(docType) && !doc.checked) {
         newErrors[`relatedDocuments.${docType}`] = "Dokumen ini wajib untuk jenis permit yang dipilih.";
       }
-      if (docType === "other" && doc.checked && !String(doc.description || "").trim()) {
-        newErrors["relatedDocuments.other.description"] = "Sebutkan nama atau jenis dokumen lain.";
+      if (docType === "other" && doc.checked) {
+        const otherEntries = normalizeOtherDocumentEntries(doc);
+        if (otherEntries.some((entry) => !entry.description.trim())) {
+          newErrors["relatedDocuments.other.description"] = "Nama setiap dokumen lain wajib diisi.";
+        }
+        if (!isPA && otherEntries.some((entry) => !entry.number.trim())) {
+          newErrors["relatedDocuments.other"] = "Nomor setiap dokumen lain wajib diisi PTWC.";
+        }
       }
-      if (doc.checked && !isPA && !String(doc.number || "").trim()) {
+      if (docType !== "other" && doc.checked && !isPA && !String(doc.number || "").trim()) {
         newErrors[`relatedDocuments.${docType}`] =
           "Nomor dokumen wajib diisi PTWC ketika dokumen dicentang.";
       }
@@ -644,7 +744,7 @@ export default function PermitPlanningForm({
               rp3k: { checked: false, number: "" },
               gasTestRecord: { checked: false, number: "" },
               dispensasi: { checked: false, number: "" },
-              other: { checked: false, number: "" },
+              other: { checked: false, description: "", number: "", entries: [{ description: "", number: "" }] },
             },
           });
         }
@@ -1001,13 +1101,17 @@ export default function PermitPlanningForm({
                   doc={doc}
                   checked={formData.relatedDocuments[doc.key]?.checked || false}
                   number={formData.relatedDocuments[doc.key]?.number || ""}
-                  description={formData.relatedDocuments[doc.key]?.description || ""}
+                  otherEntries={doc.key === "other"
+                    ? normalizeOtherDocumentEntries(formData.relatedDocuments.other)
+                    : []}
                   error={errors[`relatedDocuments.${doc.key}`]}
                   descriptionError={errors[`relatedDocuments.${doc.key}.description`]}
                   required={requiredDocumentKeys.has(doc.key)}
                   onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
                   onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
-                  onDescription={(description) => handleRelatedDocumentChange(doc.key, "description", description)}
+                  onOtherEntryChange={handleOtherEntryChange}
+                  onAddOtherEntry={addOtherDocumentEntry}
+                  onRemoveOtherEntry={removeOtherDocumentEntry}
                   allowDescriptionEdit={isPA}
                   canEditSelection={!isPTWCReview}
                   showNumberInput={!isPA}
@@ -1021,13 +1125,10 @@ export default function PermitPlanningForm({
                   doc={doc}
                   checked={formData.relatedDocuments[doc.key]?.checked || false}
                   number={formData.relatedDocuments[doc.key]?.number || ""}
-                  description={formData.relatedDocuments[doc.key]?.description || ""}
                   error={errors[`relatedDocuments.${doc.key}`]}
-                  descriptionError={errors[`relatedDocuments.${doc.key}.description`]}
                   required={requiredDocumentKeys.has(doc.key)}
                   onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
                   onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
-                  onDescription={(description) => handleRelatedDocumentChange(doc.key, "description", description)}
                   allowDescriptionEdit={isPA}
                   canEditSelection={!isPTWCReview}
                   showNumberInput={!isPA}

@@ -2,7 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import withAuth from '../../../components/withAuth';
-import { CRITICAL_ACTIVITIES, GAS_TYPES, durationText } from '@/lib/ptwForm';
+import {
+  CRITICAL_ACTIVITIES,
+  GAS_TYPES,
+  durationText,
+  normalizeOtherDocumentEntries,
+} from '@/lib/ptwForm';
 
 const THEMES = {
   COLD_WORK: {
@@ -158,10 +163,17 @@ function PermitPrint() {
       : (permit.gasMeasurement || {});
   } catch { gas = {}; }
 
-  const docNum = (key) => (docs[key]?.checked ? docs[key].number || 'v' : '');
+  const otherDocumentEntries = normalizeOtherDocumentEntries(docs.other);
+  const docNum = (key) => {
+    if (!docs[key]?.checked) return '';
+    if (key === 'other') {
+      return otherDocumentEntries.map((entry) => entry.number || 'v').join(', ');
+    }
+    return docs[key].number || 'v';
+  };
   const docLeft = [
     ['ra', 'Risk Assessment (RA)'], ['jsa', 'JSA'], ['icc', 'ICC'], ['csep', 'CSEP'],
-    ['sdiSldkb', 'SDS/LDKB'], ['swc', 'SWC'], ['other', 'Lain-lain (sebutkan)'],
+    ['sdiSldkb', 'SDS/LDKB'], ['swc', 'SWC'], ['other', 'Lain-lain'],
   ];
   const docRight = [
     ['workProcedure', 'Prosedur kerja'], ['excavationCert', 'Excavation certificate'],
@@ -305,7 +317,9 @@ function PermitPrint() {
                       <td style={{ ...cell, width: 16, textAlign: 'center' }}><Check checked={!!docs[key]?.checked} /></td>
                       <td style={cell}>
                         {label}
-                        {key === 'other' && docs.other?.description ? `: ${docs.other.description}` : null}
+                        {key === 'other' && otherDocumentEntries.some((entry) => entry.description)
+                          ? `: ${otherDocumentEntries.map((entry) => entry.description).filter(Boolean).join(', ')}`
+                          : null}
                       </td>
                     </tr>
                   ))}
