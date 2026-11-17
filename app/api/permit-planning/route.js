@@ -139,9 +139,9 @@ export async function POST(request) {
         documentsForStorage = typeof documentsForStorage === 'string'
           ? JSON.parse(documentsForStorage)
           : { ...documentsForStorage };
-        for (const key of ['ra', 'jsa']) {
-          if (documentsForStorage[key]) {
-            documentsForStorage[key] = { ...documentsForStorage[key], number: '' };
+        for (const [key, document] of Object.entries(documentsForStorage)) {
+          if (document && typeof document === 'object') {
+            documentsForStorage[key] = { ...document, number: '' };
           }
         }
       } catch {

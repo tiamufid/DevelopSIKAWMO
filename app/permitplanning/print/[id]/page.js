@@ -305,7 +305,7 @@ function PermitPrint() {
                       <td style={{ ...cell, width: 16, textAlign: 'center' }}><Check checked={!!docs[key]?.checked} /></td>
                       <td style={cell}>
                         {label}
-                        {key === 'other' && docs.other?.number ? <Fill value={docs.other.number} width={70} /> : null}
+                        {key === 'other' && docs.other?.description ? `: ${docs.other.description}` : null}
                       </td>
                     </tr>
                   ))}

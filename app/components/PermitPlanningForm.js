@@ -5,10 +5,15 @@ function DocumentCheck({
   checked,
   number,
   error,
+  description = "",
+  descriptionError,
   required = false,
   onCheck,
   onNumber,
-  readOnlyNumber = false,
+  onDescription,
+  allowDescriptionEdit = false,
+  canEditSelection = true,
+  showNumberInput = true,
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -17,8 +22,9 @@ function DocumentCheck({
           type="checkbox"
           id={doc.key}
           checked={checked}
+          disabled={!canEditSelection}
           onChange={(e) => onCheck(e.target.checked)}
-          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
       <div className="flex-1">
@@ -26,12 +32,30 @@ function DocumentCheck({
           {doc.label}{required ? " *" : ""}
         </label>
         {checked && (
-          <div>
-            {readOnlyNumber ? (
-              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                {number || "Nomor dokumen akan diisi oleh PTWC setelah permit diserahkan."}
-              </p>
-            ) : (
+          <div className="mt-2">
+            {doc.key === "other" && (
+              <div className="mb-2">
+                {allowDescriptionEdit ? (
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => onDescription(e.target.value)}
+                    placeholder="Sebutkan nama/jenis dokumen lain"
+                    aria-label="Nama atau jenis dokumen lain"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  />
+                ) : (
+                  <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                    Jenis dokumen: {description || "Belum disebutkan oleh PA"}
+                  </p>
+                )}
+                {descriptionError && (
+                  <p className="text-red-500 text-sm mt-1">{descriptionError}</p>
+                )}
+              </div>
+            )}
+            {showNumberInput ? (
               <input
                 type="text"
                 placeholder={doc.placeholder}
@@ -39,6 +63,10 @@ function DocumentCheck({
                 onChange={(e) => onNumber(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
               />
+            ) : (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                Nomor dokumen akan diisi oleh PTWC.
+              </p>
             )}
             {errors.criticalActivities && (
               <p className="mt-2 text-sm text-red-600">{errors.criticalActivities}</p>
@@ -68,7 +96,6 @@ import {
   GAS_TYPES,
   DOC_LEFT,
   DOC_RIGHT,
-  DOC_EXTRA,
   DOCUMENT_TYPES,
   emptyGasMeasurement,
   normalizeGasMeasurement,
@@ -114,7 +141,6 @@ export default function PermitPlanningForm({
       rp3k: { checked: false, number: "" },
       gasTestRecord: { checked: false, number: "" },
       dispensasi: { checked: false, number: "" },
-      tkiTko: { checked: false, number: "" },
       other: { checked: false, number: "" },
     },
   });
@@ -516,10 +542,12 @@ export default function PermitPlanningForm({
       if (requiredDocumentKeys.has(docType) && !doc.checked) {
         newErrors[`relatedDocuments.${docType}`] = "Dokumen ini wajib untuk jenis permit yang dipilih.";
       }
-      const numberAssignedByPTWC = isPA && ["ra", "jsa"].includes(docType);
-      if (doc.checked && !doc.number.trim() && !numberAssignedByPTWC) {
+      if (docType === "other" && doc.checked && !String(doc.description || "").trim()) {
+        newErrors["relatedDocuments.other.description"] = "Sebutkan nama atau jenis dokumen lain.";
+      }
+      if (doc.checked && !isPA && !String(doc.number || "").trim()) {
         newErrors[`relatedDocuments.${docType}`] =
-          "Document number/title is required when checked";
+          "Nomor dokumen wajib diisi PTWC ketika dokumen dicentang.";
       }
     });
 
@@ -619,7 +647,6 @@ export default function PermitPlanningForm({
               rp3k: { checked: false, number: "" },
               gasTestRecord: { checked: false, number: "" },
               dispensasi: { checked: false, number: "" },
-              tkiTko: { checked: false, number: "" },
               other: { checked: false, number: "" },
             },
           });
@@ -966,7 +993,7 @@ export default function PermitPlanningForm({
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            2. Dokumen Permit Pack (diisi oleh PA dan ditinjau oleh AA)
+            2. Dokumen Permit Pack (dicentang oleh PA, nomor dokumen diisi PTWC)
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
@@ -977,11 +1004,16 @@ export default function PermitPlanningForm({
                   doc={doc}
                   checked={formData.relatedDocuments[doc.key]?.checked || false}
                   number={formData.relatedDocuments[doc.key]?.number || ""}
+                  description={formData.relatedDocuments[doc.key]?.description || ""}
                   error={errors[`relatedDocuments.${doc.key}`]}
+                  descriptionError={errors[`relatedDocuments.${doc.key}.description`]}
                   required={requiredDocumentKeys.has(doc.key)}
                   onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
                   onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
-                  readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
+                  onDescription={(description) => handleRelatedDocumentChange(doc.key, "description", description)}
+                  allowDescriptionEdit={isPA}
+                  canEditSelection={!isPTWCReview}
+                  showNumberInput={!isPA}
                 />
               ))}
             </div>
@@ -992,30 +1024,19 @@ export default function PermitPlanningForm({
                   doc={doc}
                   checked={formData.relatedDocuments[doc.key]?.checked || false}
                   number={formData.relatedDocuments[doc.key]?.number || ""}
+                  description={formData.relatedDocuments[doc.key]?.description || ""}
                   error={errors[`relatedDocuments.${doc.key}`]}
+                  descriptionError={errors[`relatedDocuments.${doc.key}.description`]}
                   required={requiredDocumentKeys.has(doc.key)}
                   onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
                   onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
-                  readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
+                  onDescription={(description) => handleRelatedDocumentChange(doc.key, "description", description)}
+                  allowDescriptionEdit={isPA}
+                  canEditSelection={!isPTWCReview}
+                  showNumberInput={!isPA}
                 />
               ))}
             </div>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-primary/20 space-y-3">
-            {DOC_EXTRA.map((doc) => (
-              <DocumentCheck
-                key={doc.key}
-                doc={doc}
-                checked={formData.relatedDocuments[doc.key]?.checked || false}
-                number={formData.relatedDocuments[doc.key]?.number || ""}
-                error={errors[`relatedDocuments.${doc.key}`]}
-                required={requiredDocumentKeys.has(doc.key)}
-                onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
-                onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
-                readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
-              />
-            ))}
           </div>
 
           <div className="border border-gray-200 rounded-lg p-4 mt-4 bg-white">

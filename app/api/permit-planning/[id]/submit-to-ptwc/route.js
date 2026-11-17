@@ -91,6 +91,13 @@ export async function POST(request, { params }) {
       }
     }
 
+    if (documents.other?.checked && !String(documents.other.description || '').trim()) {
+      return Response.json({
+        success: false,
+        message: 'PA must specify the name of the other document'
+      }, { status: 400 });
+    }
+
     const updatedPermit = await prisma.permitPlanning.update({
       where: { id: parseInt(id) },
       data: { status: 'PENDING_PTWC' },

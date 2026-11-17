@@ -144,11 +144,17 @@ export async function POST(request, { params }) {
       }
     }
 
-    for (const key of ['ra', 'jsa']) {
-      if (documents[key]?.checked && !documents[key]?.number?.trim()) {
+    for (const [key, document] of Object.entries(documents)) {
+      if (key === 'other' && document?.checked && !String(document?.description || '').trim()) {
         return Response.json({
           success: false,
-          message: `PTWC must assign the ${key.toUpperCase()} number when that document is selected`
+          message: 'PA must specify the name of the other document'
+        }, { status: 400 });
+      }
+      if (document?.checked && !String(document?.number || '').trim()) {
+        return Response.json({
+          success: false,
+          message: `PTWC must assign the number for ${key} when that document is selected`
         }, { status: 400 });
       }
     }

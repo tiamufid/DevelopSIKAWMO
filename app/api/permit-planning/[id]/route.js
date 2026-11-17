@@ -106,13 +106,37 @@ export async function PUT(request, { params }) {
           ? JSON.parse(existingPermit.relatedDocuments || '{}')
           : (existingPermit.relatedDocuments || {});
       } catch {}
-      for (const key of ['ra', 'jsa']) {
-        if (documentsForStorage[key]) {
+      for (const [key, document] of Object.entries(documentsForStorage)) {
+        if (document && typeof document === 'object') {
           documentsForStorage[key] = {
-            ...documentsForStorage[key],
+            ...document,
             number: existingDocuments[key]?.number || ''
           };
         }
+      }
+    } else if (canReviewPARequest && documentsForStorage) {
+      let existingDocuments = {};
+      try {
+        existingDocuments = typeof existingPermit.relatedDocuments === 'string'
+          ? JSON.parse(existingPermit.relatedDocuments || '{}')
+          : (existingPermit.relatedDocuments || {});
+      } catch {}
+
+      const documentKeys = new Set([
+        ...Object.keys(existingDocuments),
+        ...Object.keys(documentsForStorage)
+      ]);
+      for (const key of documentKeys) {
+        const existingDocument = existingDocuments[key] || {};
+        const submittedDocument = documentsForStorage[key] || {};
+        documentsForStorage[key] = {
+          ...submittedDocument,
+          checked: Boolean(existingDocument.checked),
+          description: existingDocument.description || '',
+          number: existingDocument.checked
+            ? (submittedDocument.number || '')
+            : (existingDocument.number || '')
+        };
       }
     }
 
