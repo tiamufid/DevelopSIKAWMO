@@ -220,9 +220,6 @@ export default function ApprovalPanel({ permit, user, onApprove, onReject, onRef
             <strong>Location:</strong> {permit.workLocation}
           </p>
           <p className="text-sm text-gray-600 mb-1">
-            <strong>Zone:</strong> {permit.zone}
-          </p>
-          <p className="text-sm text-gray-600 mb-1">
             <strong>Work Type:</strong> {permit.workType?.replace('_', ' ')}
           </p>
         </div>

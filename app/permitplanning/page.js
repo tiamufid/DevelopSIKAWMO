@@ -581,12 +581,6 @@ function PermitPlanning() {
                       </div>
                     </div>
                     <div>
-                      <strong>Zone:</strong> 
-                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
-                        {selectedPermit.zone}
-                      </span>
-                    </div>
-                    <div>
                       <strong>Status:</strong> {getStatusBadge(selectedPermit.status)}
                     </div>
                     <div>
