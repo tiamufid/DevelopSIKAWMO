@@ -225,6 +225,13 @@ export default function PermitPlanningForm({
     { value: "HOT_WORK_FLAME", label: "Hot Work", color: "red" },
   ];
 
+  const workTypeTextColors = {
+    blue: "#005BAA",
+    black: "#000000",
+    yellow: "#9A6700",
+    red: "#C00000",
+  };
+
   const requiredDocumentKeys = new Set(formData.workType ? ["ra", "jsa"] : []);
   if (formData.workType === "COLD_WORK") {
     requiredDocumentKeys.add("workProcedure");
@@ -770,7 +777,14 @@ export default function PermitPlanningForm({
           {isPA ? (
             <div className="rounded-md border border-primary/20 bg-white p-3">
               <p className="text-sm font-medium text-quaternary">Jenis izin kerja</p>
-              <p className="mt-1 font-semibold text-primary">
+              <p
+                className="mt-1 font-semibold"
+                style={{
+                  color: workTypeTextColors[
+                    workTypes.find((type) => type.value === formData.workType)?.color
+                  ] || "#374151",
+                }}
+              >
                 {workTypes.find((type) => type.value === formData.workType)?.label || "Pilih jenis permit"}
               </p>
             </div>
