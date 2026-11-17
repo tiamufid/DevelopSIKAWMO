@@ -18,7 +18,6 @@ function PermitPlanning() {
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [filterArea, setFilterArea] = useState('');
-  const [filterZone, setFilterZone] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   
   // New states for modals and notifications
@@ -151,7 +150,6 @@ function PermitPlanning() {
       const params = new URLSearchParams();
       if (userData.id) params.set('userId', userData.id);
       if (filterArea) params.set('area', filterArea);
-      if (filterZone) params.set('zone', filterZone);
       if (filterStatus && !['APPROVED_ALL', 'REJECTED_ALL'].includes(filterStatus)) {
         params.set('status', filterStatus);
       }
@@ -227,7 +225,6 @@ function PermitPlanning() {
 
   const filteredPermits = permits.filter(permit => {
     if (filterArea && (permit.areaName || 'ORF') !== filterArea) return false;
-    if (filterZone && permit.zone !== filterZone) return false;
     if (filterStatus) {
       // Handle grouped status filtering for better UX
       if (filterStatus === 'APPROVED_ALL') {
@@ -315,24 +312,6 @@ function PermitPlanning() {
                 <option value="West">West (Offshore Barat)</option>
               </select>
             </div>
-            <div className="min-w-44">
-              <label className="block text-sm font-semibold text-quaternary mb-2">Filter by Zone</label>
-              <select
-                value={filterZone}
-                onChange={(e) => setFilterZone(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-              >
-              <option value="">All Zones</option>
-              <option value="PRC">PRC - Processing</option>
-              <option value="UTL">UTL - Utilities</option>
-              <option value="BLD">BLD - Building</option>
-              <option value="GMS">GMS - Gas Metering</option>
-              <option value="CCR">CCR - Control Room</option>
-              <option value="OY">OY - Open Yard</option>
-              <option value="NBL">NBL - New Building</option>
-              <option value="WS">WS - Workshop</option>
-            </select>
-          </div>
           <div className="min-w-64">
             <label className="block text-sm font-semibold text-quaternary mb-2">Filter by Status</label>
             <select
@@ -356,13 +335,12 @@ function PermitPlanning() {
               <option value="EXPIRED">Expired</option>
             </select>
           </div>
-          {(filterArea || filterZone || filterStatus) && (
+          {(filterArea || filterStatus) && (
             <div className="flex items-end">
               <Button
                 variant="secondary"
                 onClick={() => {
                   setFilterArea('');
-                  setFilterZone('');
                   setFilterStatus('');
                 }}
                 className="flex items-center gap-2"
