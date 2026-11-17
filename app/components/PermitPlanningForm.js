@@ -198,18 +198,6 @@ export default function PermitPlanningForm({
   const availableFacilities = getFacilitiesByArea(selectedArea);
   const availableDecks = getDecksByFacility(selectedArea, selectedFacility);
 
-  // Zone definitions
-  const zones = [
-    { code: "PRC", name: "Processing/Production Area" },
-    { code: "UTL", name: "Utilities Area" },
-    { code: "BLD", name: "Building/Office Area" },
-    { code: "GMS", name: "Gas Metering Station" },
-    { code: "CCR", name: "Central Control Room" },
-    { code: "OY", name: "Open Yard" },
-    { code: "NBL", name: "New Building" },
-    { code: "WS", name: "Workshop/Warehouse" },
-  ];
-
   const workTypes = [
     { value: "COLD_WORK", label: "General Work", color: "blue" },
     {
@@ -497,7 +485,6 @@ export default function PermitPlanningForm({
     }
     if (!formData.workDescription)
       newErrors.workDescription = "Work description is required";
-    if (!formData.zone) newErrors.zone = "Work location (zone) is required";
     if (!formData.startDate) newErrors.startDate = "Start date is required";
     if (!formData.endDate) newErrors.endDate = "End date is required";
     if (!userId || userId === "undefined")
@@ -1220,29 +1207,6 @@ export default function PermitPlanningForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-quaternary mb-1">
-                Work Location (Zone) *
-              </label>
-              <select
-                name="zone"
-                value={formData.zone}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              >
-                <option value="">Select work location</option>
-                {zones.map((zone) => (
-                  <option key={zone.code} value={zone.code}>
-                    {zone.code} - {zone.name}
-                  </option>
-                ))}
-              </select>
-              {errors.zone && (
-                <p className="text-red-500 text-sm mt-1">{errors.zone}</p>
-              )}
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-quaternary mb-1">
                 Coordinates (Optional)

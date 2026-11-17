@@ -32,7 +32,6 @@ export async function POST(request, { params }) {
     const requiredFields = [
       'workType',
       'workDescription',
-      'zone',
       'startDate',
       'endDate',
       'performingAuthority',

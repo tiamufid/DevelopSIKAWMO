@@ -105,11 +105,11 @@ export async function POST(request) {
       userId
     } = body;
 
-    // Validasi input - work description, zone (work location), start date, end date, and userId are required
-    if (!workDescription || !zone || !startDate || !endDate || !userId) {
+    // Zone is optional; workLocation may be supplied by the selected site layout.
+    if (!workDescription || (!workLocation && !zone) || !startDate || !endDate || !userId) {
       return Response.json({
         success: false,
-        message: 'Work description, work location (zone), start date, end date, and userId are required'
+        message: 'Work description, work location, start date, end date, and userId are required'
       }, { status: 400 });
     }
 
@@ -213,7 +213,7 @@ export async function POST(request) {
         workLocation: (workLocation && String(workLocation).trim()) || zone,
         areaName: areaName || 'ORF',
         coordinates: coordinatesData,
-        zone: zone,
+        zone: zone || null,
         workType: workType || null,
         riskLevel: riskLevel || 'LOW',
         startDate: new Date(startDate),
