@@ -5,12 +5,23 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    const role = searchParams.get('role');
     const status = searchParams.get('status');
     const zone = searchParams.get('zone');
     const area = searchParams.get('area') || searchParams.get('areaName');
     
     const where = {};
-    if (userId && userId !== 'undefined') where.userId = parseInt(userId);
+    if (userId && userId !== 'undefined') {
+      const viewer = await prisma.user.findUnique({ where: { id: parseInt(userId) } });
+      if (role === 'PTWC' && viewer?.role === 'PTWC') {
+        where.OR = [
+          { userId: parseInt(userId) },
+          { status: 'PENDING_PTWC', user: { role: 'PA' } }
+        ];
+      } else {
+        where.userId = parseInt(userId);
+      }
+    }
     if (status) where.status = status;
     if (zone) where.zone = zone;
     if (area && area !== 'all') where.areaName = area;
@@ -73,7 +84,8 @@ export async function POST(request) {
     const {
       permitNumber,
       workDescription,
-      zone, // Using zone instead of workLocation to match form
+      zone,
+      workLocation,
       areaName,
       workType,
       riskLevel,
@@ -90,7 +102,6 @@ export async function POST(request) {
       simpleIsolation,
       sanctionToTest,
       gasMeasurement,
-      status = 'DRAFT',
       userId
     } = body;
 
@@ -120,6 +131,25 @@ export async function POST(request) {
         success: false,
         message: 'Only PTWC or PA can create permits'
       }, { status: 403 });
+    }
+
+    let documentsForStorage = relatedDocuments || null;
+    if (user.role === 'PA' && documentsForStorage) {
+      try {
+        documentsForStorage = typeof documentsForStorage === 'string'
+          ? JSON.parse(documentsForStorage)
+          : { ...documentsForStorage };
+        for (const key of ['ra', 'jsa']) {
+          if (documentsForStorage[key]) {
+            documentsForStorage[key] = { ...documentsForStorage[key], number: '' };
+          }
+        }
+      } catch {
+        return Response.json({
+          success: false,
+          message: 'Invalid related document data'
+        }, { status: 400 });
+      }
     }
 
     // PA doesn't need permit number upfront (assigned by PTWC later)
@@ -178,9 +208,9 @@ export async function POST(request) {
     // Buat permit planning baru
     const permit = await prisma.permitPlanning.create({
       data: {
-        permitNumber: (user.role === 'PA') ? (permitNumber && permitNumber.trim() !== '' ? permitNumber.trim() : null) : permitNumber.trim(),
+        permitNumber: user.role === 'PA' ? null : permitNumber.trim(),
         workDescription: workDescription.trim(),
-        workLocation: zone, // Use zone as work location
+        workLocation: (workLocation && String(workLocation).trim()) || zone,
         areaName: areaName || 'ORF',
         coordinates: coordinatesData,
         zone: zone,
@@ -193,12 +223,12 @@ export async function POST(request) {
         areaAuthority: areaAuthority || null,
         siteControllerName: siteControllerName || null,
         safetyMeasures: safetyMeasures || null,
-        relatedDocuments: relatedDocuments ? JSON.stringify(relatedDocuments) : null,
+        relatedDocuments: documentsForStorage ? JSON.stringify(documentsForStorage) : null,
         equipmentIdentity: equipmentIdentity || null,
         simpleIsolation: simpleIsolation || false,
         sanctionToTest: sanctionToTest || false,
         gasMeasurement: gasMeasurement ? JSON.stringify(gasMeasurement) : null,
-        status: (user.role === 'PA') ? 'DRAFT' : (status || 'DRAFT'),
+        status: 'DRAFT',
         userId: parseInt(userId)
       },
       include: {

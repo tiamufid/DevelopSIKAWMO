@@ -13,6 +13,9 @@ function PermitPlanning() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingPermit, setEditingPermit] = useState(null);
+  const [selectedWorkType, setSelectedWorkType] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showTypePicker, setShowTypePicker] = useState(false);
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [filterArea, setFilterArea] = useState('');
   const [filterZone, setFilterZone] = useState('');
@@ -42,7 +45,8 @@ function PermitPlanning() {
     try {
       setLoading(true);
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
-      const response = await fetch(`/api/permit-planning?userId=${userData.id}`);
+      setCurrentUser(userData);
+      const response = await fetch(`/api/permit-planning?userId=${userData.id}&role=${userData.role}`);
       const result = await response.json();
       
       if (result.success) {
@@ -72,11 +76,24 @@ function PermitPlanning() {
   };
 
   const handleCreatePermit = () => {
+    if (currentUser?.role === 'PA') {
+      setShowTypePicker(true);
+      return;
+    }
     setShowCreateConfirm(true);
   };
 
   const confirmCreatePermit = () => {
     setShowCreateConfirm(false);
+    setEditingPermit(null);
+    setSelectedWorkType('');
+    setShowForm(true);
+  };
+
+  const startPARequest = (workType) => {
+    setSelectedWorkType(workType);
+    setEditingPermit(null);
+    setShowTypePicker(false);
     setShowForm(true);
   };
 
@@ -110,6 +127,7 @@ function PermitPlanning() {
   };
 
   const handleEdit = (permit) => {
+    setSelectedWorkType(permit.workType || '');
     console.log('handleEdit called with permit:', permit);
     try {
       setEditingPermit(permit);
@@ -222,6 +240,24 @@ function PermitPlanning() {
     }
     return true;
   });
+
+  const canEditPermit = (permit) => {
+    if (!currentUser || !permit) return false;
+    if (currentUser.role === 'ADMIN') return true;
+    if (currentUser.role === 'PTWC' && permit.status === 'PENDING_PTWC') return true;
+    return Number(permit.userId) === Number(currentUser.id)
+      && permit.status === 'DRAFT'
+      && ['PTWC', 'PA'].includes(currentUser.role);
+  };
+
+  const canDeletePermit = (permit) => currentUser?.role === 'ADMIN'
+    || (Number(permit?.userId) === Number(currentUser?.id)
+      && permit?.status === 'DRAFT'
+      && ['PTWC', 'PA'].includes(currentUser?.role));
+
+  const canPrintPermit = (permit) => currentUser?.role === 'PA'
+    && Number(permit?.userId) === Number(currentUser.id)
+    && ['FULLY_APPROVED', 'ACTIVE', 'COMPLETED'].includes(permit.status);
 
 
   return (
@@ -480,26 +516,30 @@ function PermitPlanning() {
                           </button>
                           
                           {/* Edit Button */}
-                          <button
-                            onClick={() => handleEdit(permit)}
-                            className="p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-600 rounded-lg transition-colors duration-200"
-                            title="Edit Permit"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
+                          {canEditPermit(permit) && (
+                            <button
+                              onClick={() => handleEdit(permit)}
+                              className="p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-600 rounded-lg transition-colors duration-200"
+                              title={permit.status === 'PENDING_PTWC' ? 'Review and complete PTWC numbers' : 'Edit Permit'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
                           
                           {/* Delete Button */}
-                          <button
-                            onClick={() => handleDeleteClick(permit)}
-                            className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors duration-200"
-                            title="Delete Permit"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {canDeletePermit(permit) && (
+                            <button
+                              onClick={() => handleDeleteClick(permit)}
+                              className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors duration-200"
+                              title="Delete Permit"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -862,7 +902,7 @@ function PermitPlanning() {
               </div>
               
               <div className="mt-6 flex gap-2 flex-wrap">
-                {['FULLY_APPROVED', 'ACTIVE', 'COMPLETED'].includes(selectedPermit.status) && (
+                {canPrintPermit(selectedPermit) && (
                   <Button
                     variant="outline"
                     onClick={() => window.open(`/permitplanning/print/${selectedPermit.id}`, '_blank')}
@@ -875,9 +915,11 @@ function PermitPlanning() {
                     Print Permit
                   </Button>
                 )}
-                <Button onClick={() => handleEdit(selectedPermit)}>
-                  Edit Permit
-                </Button>
+                {canEditPermit(selectedPermit) && (
+                  <Button onClick={() => handleEdit(selectedPermit)}>
+                    {selectedPermit.status === 'PENDING_PTWC' ? 'Review Permit' : 'Edit Permit'}
+                  </Button>
+                )}
                 <Button 
                   variant="secondary" 
                   onClick={() => setSelectedPermit(null)}
@@ -914,6 +956,7 @@ function PermitPlanning() {
               
               <PermitPlanningForm
                 editData={editingPermit}
+                initialWorkType={selectedWorkType}
                 onSubmitSuccess={handleFormSubmit}
                 showNotification={showNotification}
                 onCancel={() => {
@@ -927,6 +970,47 @@ function PermitPlanning() {
       )}
 
       {/* Create Permit Confirmation Modal */}
+      {showTypePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-quaternary">Pilih Jenis Permit</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Pilihan ini menentukan formulir dan format cetak permit.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTypePicker(false)}
+                className="rounded-md p-2 text-gray-500 hover:bg-gray-100"
+                aria-label="Tutup pemilihan jenis permit"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { value: 'COLD_WORK', label: 'General Work', color: 'border-blue-600', description: 'Pekerjaan umum tanpa potensi percikan atau api.' },
+                { value: 'COLD_WORK_BREAKING', label: 'Breaking Containment', color: 'border-gray-900', description: 'Pekerjaan membuka atau memutus containment.' },
+                { value: 'HOT_WORK_SPARK', label: 'Critical Work', color: 'border-amber-400', description: 'Pekerjaan kritis seperti lifting, ketinggian, dan aktivitas berisiko tinggi.' },
+                { value: 'HOT_WORK_FLAME', label: 'Hot Work', color: 'border-red-600', description: 'Pekerjaan yang menggunakan api terbuka atau menghasilkan panas.' },
+              ].map((type) => (
+                <button
+                  type="button"
+                  key={type.value}
+                  onClick={() => startPARequest(type.value)}
+                  className={`rounded-lg border-l-4 ${type.color} bg-gray-50 p-4 text-left transition hover:bg-primary/5 hover:shadow`}
+                >
+                  <span className="font-semibold text-quaternary">{type.label}</span>
+                  <span className="mt-1 block text-sm text-gray-600">{type.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmModal
         isOpen={showCreateConfirm}
         onClose={() => setShowCreateConfirm(false)}

@@ -68,8 +68,16 @@ export async function GET(request) {
 // Dashboard untuk PTWC
 async function getPTWCDashboard(userId) {
   const permits = await prisma.permitPlanning.findMany({
-    where: { userId },
+    where: {
+      OR: [
+        { userId },
+        { status: 'PENDING_PTWC', user: { role: 'PA' } }
+      ]
+    },
     include: {
+      user: {
+        select: { id: true, name: true, email: true, role: true }
+      },
       aaApprover: {
         select: { id: true, name: true, email: true }
       },
@@ -86,6 +94,7 @@ async function getPTWCDashboard(userId) {
   const stats = {
     total: permits.length,
     draft: permits.filter(p => p.status === 'DRAFT').length,
+    pendingPTWC: permits.filter(p => p.status === 'PENDING_PTWC').length,
     pendingAA: permits.filter(p => p.status === 'PENDING_AA_APPROVAL').length,
     pendingSC: permits.filter(p => p.status === 'PENDING_SC_APPROVAL').length,
     fullyApproved: permits.filter(p => p.status === 'FULLY_APPROVED').length,
@@ -97,7 +106,7 @@ async function getPTWCDashboard(userId) {
     permits,
     stats,
     role: 'PTWC',
-    title: 'PTWC Dashboard - My Permits'
+    title: 'PTWC Dashboard - My Permits and PA Requests'
   };
 }
 

@@ -38,7 +38,7 @@ export async function POST(request, { params }) {
     const permit = await prisma.permitPlanning.findUnique({
       where: { id: parseInt(id) },
       include: {
-        user: true
+        user: { select: { id: true, role: true } }
       }
     });
 
@@ -49,27 +49,119 @@ export async function POST(request, { params }) {
       }, { status: 404 });
     }
 
-    // Hanya permit owner atau admin yang bisa submit
-    if (permit.userId !== parseInt(userId) && user.role !== 'ADMIN') {
+    const isPTWCReview = user.role === 'PTWC'
+      && permit.status === 'PENDING_PTWC'
+      && permit.user?.role === 'PA';
+
+    // PTWC may submit PA-owned requests after assigning the required numbers.
+    if (permit.userId !== parseInt(userId) && user.role !== 'ADMIN' && !isPTWCReview) {
       return Response.json({
         success: false,
-        message: 'You can only submit your own permits'
+        message: 'You are not allowed to submit this permit'
       }, { status: 403 });
     }
 
-    // Hanya permit dengan status DRAFT yang bisa di-submit
-    if (permit.status !== 'DRAFT') {
+    if (!isPTWCReview && permit.status !== 'DRAFT') {
       return Response.json({
         success: false,
         message: 'Only draft permits can be submitted'
       }, { status: 400 });
     }
 
-    // Update status ke PENDING_AA_APPROVAL
+    const requiredFields = [
+      'workType',
+      'workDescription',
+      'zone',
+      'startDate',
+      'endDate',
+      'performingAuthority',
+      'company',
+      'areaAuthority',
+      'siteControllerName'
+    ];
+    const missingFields = requiredFields.filter((field) => {
+      const value = permit[field];
+      return value == null || (typeof value === 'string' && !value.trim());
+    });
+    if (missingFields.length) {
+      return Response.json({
+        success: false,
+        message: `Complete the permit fields before submitting: ${missingFields.join(', ')}`
+      }, { status: 400 });
+    }
+
+    if (!permit.permitNumber?.trim()) {
+      return Response.json({
+        success: false,
+        message: isPTWCReview
+          ? 'PTWC must assign a permit number first'
+          : 'A permit number is required before submitting to AA'
+      }, { status: 400 });
+    }
+
+    let documents = {};
+    try {
+      documents = typeof permit.relatedDocuments === 'string'
+        ? JSON.parse(permit.relatedDocuments || '{}')
+        : (permit.relatedDocuments || {});
+    } catch {
+      return Response.json({ success: false, message: 'Invalid permit document data' }, { status: 400 });
+    }
+
+    let gasMeasurement = {};
+    try {
+      gasMeasurement = typeof permit.gasMeasurement === 'string'
+        ? JSON.parse(permit.gasMeasurement || '{}')
+        : (permit.gasMeasurement || {});
+    } catch {
+      return Response.json({ success: false, message: 'Invalid permit safety data' }, { status: 400 });
+    }
+
+    const requiredDocumentKeys = new Set(['ra', 'jsa']);
+    if (permit.workType === 'COLD_WORK') {
+      requiredDocumentKeys.add('workProcedure');
+    } else if (permit.workType === 'COLD_WORK_BREAKING' || permit.workType === 'HOT_WORK_FLAME') {
+      ['icc', 'workProcedure', 'swc'].forEach((key) => requiredDocumentKeys.add(key));
+    } else if (permit.workType === 'HOT_WORK_SPARK') {
+      requiredDocumentKeys.add('workProcedure');
+      const activities = Array.isArray(gasMeasurement.criticalActivities)
+        ? gasMeasurement.criticalActivities
+        : [];
+      if (!activities.length) {
+        return Response.json({ success: false, message: 'Select at least one critical work activity' }, { status: 400 });
+      }
+      if (activities.includes('live_electrical')) requiredDocumentKeys.add('icc');
+      if (activities.some((key) => ['working_at_height', 'critical_lift', 'ground_disturbance'].includes(key))) {
+        requiredDocumentKeys.add('swc');
+      }
+    }
+
+    for (const key of requiredDocumentKeys) {
+      if (!documents[key]?.checked) {
+        return Response.json({
+          success: false,
+          message: `The ${key} document is required for this permit type`
+        }, { status: 400 });
+      }
+    }
+
+    for (const key of ['ra', 'jsa']) {
+      if (documents[key]?.checked && !documents[key]?.number?.trim()) {
+        return Response.json({
+          success: false,
+          message: `PTWC must assign the ${key.toUpperCase()} number when that document is selected`
+        }, { status: 400 });
+      }
+    }
+
     const updatedPermit = await prisma.permitPlanning.update({
       where: { id: parseInt(id) },
       data: {
-        status: 'PENDING_AA_APPROVAL'
+        status: 'PENDING_AA_APPROVAL',
+        ...(isPTWCReview ? {
+          ptwcAssignedBy: user.id,
+          ptwcAssignedAt: new Date()
+        } : {})
       },
       include: {
         user: {

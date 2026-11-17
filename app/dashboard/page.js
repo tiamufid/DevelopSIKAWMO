@@ -20,7 +20,9 @@ function Dashboard({ user }) {
   const handlePermitSubmit = (updatedPermit) => {
     setNotification({
       show: true,
-      message: "Permit submitted for AA approval successfully!",
+      message: updatedPermit.status === 'PENDING_PTWC'
+        ? "Permit submitted to PTWC successfully!"
+        : "Permit submitted for AA approval successfully!",
       type: "success"
     });
     // Refresh dashboard data
@@ -225,7 +227,7 @@ function Dashboard({ user }) {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Pending</p>
                     <p className="text-3xl font-bold text-yellow-600">
-                      {(dashboardData?.stats?.pendingAA || 0) + (dashboardData?.stats?.pendingSC || 0) + (dashboardData?.stats?.pendingApproval || 0) + (dashboardData?.stats?.draft || 0)}
+                      {(dashboardData?.stats?.pendingPTWC || 0) + (dashboardData?.stats?.pendingAA || 0) + (dashboardData?.stats?.pendingSC || 0) + (dashboardData?.stats?.pendingApproval || 0) + (dashboardData?.stats?.draft || 0)}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       {dashboardData?.stats?.draft ? `${dashboardData.stats.draft} draft` : 'Needs approval'}
@@ -391,6 +393,18 @@ function Dashboard({ user }) {
                     Manage All Permits
                   </button>
                 )}
+
+                {user?.role === 'PTWC' && (dashboardData?.stats?.pendingPTWC || 0) > 0 && (
+                  <button
+                    onClick={() => router.push('/permitplanning')}
+                    className="w-full flex items-center justify-between px-4 py-3 text-sm bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors shadow-md"
+                  >
+                    <span>Review PA Requests</span>
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 font-semibold">
+                      {dashboardData.stats.pendingPTWC}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -405,7 +419,8 @@ function Dashboard({ user }) {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    {dashboardData?.role === 'PTWC' || dashboardData?.role === 'PA' ? 'My Permits' :
+                    {dashboardData?.role === 'PTWC' ? 'My Permits & PA Requests' :
+                     dashboardData?.role === 'PA' ? 'My Permits' :
                      dashboardData?.role === 'AA' ? 'Permits Awaiting AA Approval' :
                      dashboardData?.role === 'SC' ? 'Permits Awaiting SC Approval' :
                      dashboardData?.role === 'CC' ? 'Permits Awaiting CC Approval' :

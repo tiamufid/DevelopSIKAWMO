@@ -29,6 +29,69 @@ export async function POST(request, { params }) {
       return Response.json({ success: false, message: 'Only draft permits can be submitted' }, { status: 400 });
     }
 
+    const requiredFields = [
+      'workType',
+      'workDescription',
+      'zone',
+      'startDate',
+      'endDate',
+      'performingAuthority',
+      'company',
+      'areaAuthority',
+      'siteControllerName'
+    ];
+    const missingFields = requiredFields.filter((field) => {
+      const value = permit[field];
+      return value == null || (typeof value === 'string' && !value.trim());
+    });
+    if (missingFields.length) {
+      return Response.json({
+        success: false,
+        message: `Complete the permit fields before submitting: ${missingFields.join(', ')}`
+      }, { status: 400 });
+    }
+
+    let documents = {};
+    let gasMeasurement = {};
+    try {
+      documents = typeof permit.relatedDocuments === 'string'
+        ? JSON.parse(permit.relatedDocuments || '{}')
+        : (permit.relatedDocuments || {});
+      gasMeasurement = typeof permit.gasMeasurement === 'string'
+        ? JSON.parse(permit.gasMeasurement || '{}')
+        : (permit.gasMeasurement || {});
+    } catch {
+      return Response.json({ success: false, message: 'Invalid permit pack data' }, { status: 400 });
+    }
+
+    const requiredDocumentKeys = new Set(['ra', 'jsa']);
+    if (permit.workType === 'COLD_WORK') {
+      requiredDocumentKeys.add('workProcedure');
+    } else if (permit.workType === 'COLD_WORK_BREAKING' || permit.workType === 'HOT_WORK_FLAME') {
+      ['icc', 'workProcedure', 'swc'].forEach((key) => requiredDocumentKeys.add(key));
+    } else if (permit.workType === 'HOT_WORK_SPARK') {
+      requiredDocumentKeys.add('workProcedure');
+      const activities = Array.isArray(gasMeasurement.criticalActivities)
+        ? gasMeasurement.criticalActivities
+        : [];
+      if (!activities.length) {
+        return Response.json({ success: false, message: 'Select at least one critical work activity' }, { status: 400 });
+      }
+      if (activities.includes('live_electrical')) requiredDocumentKeys.add('icc');
+      if (activities.some((key) => ['working_at_height', 'critical_lift', 'ground_disturbance'].includes(key))) {
+        requiredDocumentKeys.add('swc');
+      }
+    }
+
+    for (const key of requiredDocumentKeys) {
+      if (!documents[key]?.checked) {
+        return Response.json({
+          success: false,
+          message: `The ${key} document is required for this permit type`
+        }, { status: 400 });
+      }
+    }
+
     const updatedPermit = await prisma.permitPlanning.update({
       where: { id: parseInt(id) },
       data: { status: 'PENDING_PTWC' },

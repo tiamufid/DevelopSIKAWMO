@@ -1,4 +1,55 @@
 import { useState, useEffect } from "react";
+
+function DocumentCheck({
+  doc,
+  checked,
+  number,
+  error,
+  required = false,
+  onCheck,
+  onNumber,
+  readOnlyNumber = false,
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex items-center pt-1">
+        <input
+          type="checkbox"
+          id={doc.key}
+          checked={checked}
+          onChange={(e) => onCheck(e.target.checked)}
+          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+        />
+      </div>
+      <div className="flex-1">
+        <label htmlFor={doc.key} className="block text-sm font-medium text-quaternary mb-1 cursor-pointer">
+          {doc.label}{required ? " *" : ""}
+        </label>
+        {checked && (
+          <div>
+            {readOnlyNumber ? (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                {number || "Nomor dokumen akan diisi oleh PTWC setelah permit diserahkan."}
+              </p>
+            ) : (
+              <input
+                type="text"
+                placeholder={doc.placeholder}
+                value={number}
+                onChange={(e) => onNumber(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+              />
+            )}
+            {errors.criticalActivities && (
+              <p className="mt-2 text-sm text-red-600">{errors.criticalActivities}</p>
+            )}
+          </div>
+        )}
+        {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+      </div>
+    </div>
+  );
+}
 import Input from "./Input";
 import Button from "./Button";
 import SitePlotVisualization from "./SitePlotVisualization";
@@ -12,10 +63,22 @@ import {
   formatLocationPath,
   parseLocationFromPermit
 } from "@/lib/areaHierarchy";
+import {
+  CRITICAL_ACTIVITIES,
+  GAS_TYPES,
+  DOC_LEFT,
+  DOC_RIGHT,
+  DOC_EXTRA,
+  DOCUMENT_TYPES,
+  emptyGasMeasurement,
+  normalizeGasMeasurement,
+  durationText,
+} from "@/lib/ptwForm";
 
 export default function PermitPlanningForm({
   onSubmitSuccess,
   editData = null,
+  initialWorkType = "",
   onCancel,
   showNotification,
 }) {
@@ -36,13 +99,7 @@ export default function PermitPlanningForm({
     equipmentIdentity: "",
     simpleIsolation: false,
     sanctionToTest: false,
-    gasMeasurement: {
-      initial: false,
-      continuous: false,
-      periodic: false,
-      periodicInterval: "",
-      gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
-    },
+    gasMeasurement: emptyGasMeasurement(),
     status: "DRAFT",
     relatedDocuments: {
       ra: { checked: false, number: "" },
@@ -84,6 +141,13 @@ export default function PermitPlanningForm({
   }, [editData]);
 
   const isPA = currentUser?.role === "PA";
+  const isPTWCReview = currentUser?.role === "PTWC" && editData?.status === "PENDING_PTWC";
+
+  useEffect(() => {
+    if (!editData && initialWorkType) {
+      setFormData((prev) => ({ ...prev, workType: initialWorkType }));
+    }
+  }, [editData, initialWorkType]);
 
   // Hierarchical location state (Area -> Facility -> Deck)
   const [selectedArea, setSelectedArea] = useState("ORF");
@@ -161,23 +225,23 @@ export default function PermitPlanningForm({
     { value: "HOT_WORK_FLAME", label: "Hot Work", color: "red" },
   ];
 
-  // Document types matching the PTW permit pack checklist (left & right columns)
-  const DOCUMENT_TYPES = [
-    { key: "ra", label: "Risk Assessment (RA)", placeholder: "Enter RA document number" },
-    { key: "jsa", label: "Job Safety Analysis (JSA)", placeholder: "Enter JSA document number" },
-    { key: "icc", label: "Isolation Confirmation Certificate (ICC)", placeholder: "Enter ICC document number" },
-    { key: "csep", label: "Confined Space Entry Permit (CSEP)", placeholder: "Enter CSEP document number" },
-    { key: "sdiSldkb", label: "SDS / LDKB", placeholder: "Enter SDS/LDKB document number" },
-    { key: "swc", label: "Safe Work Certificate (SWC)", placeholder: "Enter SWC document number" },
-    { key: "workProcedure", label: "Prosedur kerja", placeholder: "Enter work procedure document number" },
-    { key: "excavationCert", label: "Excavation certificate", placeholder: "Enter excavation certificate number" },
-    { key: "liftingPlan", label: "Lifting plan", placeholder: "Enter lifting plan document number" },
-    { key: "rp3k", label: "RP3K", placeholder: "Enter RP3K document number" },
-    { key: "gasTestRecord", label: "Gas test record", placeholder: "Enter gas test record number" },
-    { key: "dispensasi", label: "Persetujuan dispensasi", placeholder: "Enter dispensasi approval number" },
-    { key: "tkiTko", label: "TKI / TKO", placeholder: "Enter TKI/TKO document number" },
-    { key: "other", label: "Lain-lain (Other)", placeholder: "Enter other document number/title" },
-  ];
+  const requiredDocumentKeys = new Set(formData.workType ? ["ra", "jsa"] : []);
+  if (formData.workType === "COLD_WORK") {
+    requiredDocumentKeys.add("workProcedure");
+  } else if (formData.workType === "COLD_WORK_BREAKING") {
+    ["icc", "workProcedure", "swc"].forEach((key) => requiredDocumentKeys.add(key));
+  } else if (formData.workType === "HOT_WORK_FLAME") {
+    ["icc", "workProcedure", "swc"].forEach((key) => requiredDocumentKeys.add(key));
+  } else if (formData.workType === "HOT_WORK_SPARK") {
+    requiredDocumentKeys.add("workProcedure");
+    const activities = formData.gasMeasurement.criticalActivities || [];
+    if (activities.includes("live_electrical")) requiredDocumentKeys.add("icc");
+    if (activities.some((key) => ["working_at_height", "critical_lift", "ground_disturbance"].includes(key))) {
+      requiredDocumentKeys.add("swc");
+    }
+  }
+
+  // Checklist dokumen mengikuti dua kolom lembar PTW.
 
   // Function to normalize coordinates to "x,y" format
   const normalizeCoordinates = (coords) => {
@@ -279,24 +343,7 @@ export default function PermitPlanningForm({
         equipmentIdentity: editData.equipmentIdentity || "",
         simpleIsolation: editData.simpleIsolation || false,
         sanctionToTest: editData.sanctionToTest || false,
-        gasMeasurement: (() => {
-          const defaults = {
-            initial: false,
-            continuous: false,
-            periodic: false,
-            periodicInterval: "",
-            gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
-          };
-          if (!editData.gasMeasurement) return defaults;
-          try {
-            const parsed = typeof editData.gasMeasurement === "string"
-              ? JSON.parse(editData.gasMeasurement)
-              : editData.gasMeasurement;
-            return { ...defaults, ...parsed, gases: { ...defaults.gases, ...(parsed.gases || {}) } };
-          } catch {
-            return defaults;
-          }
-        })(),
+        gasMeasurement: normalizeGasMeasurement(editData.gasMeasurement),
         status: editData.status || "DRAFT",
         relatedDocuments: parsedRelatedDocuments,
       });
@@ -361,6 +408,19 @@ export default function PermitPlanningForm({
     }));
   };
 
+  const toggleCriticalActivity = (key) => {
+    setFormData((prev) => {
+      const current = prev.gasMeasurement.criticalActivities || [];
+      const next = current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key];
+      return {
+        ...prev,
+        gasMeasurement: { ...prev.gasMeasurement, criticalActivities: next },
+      };
+    });
+  };
+
   const handleRelatedDocumentChange = (docType, field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -422,6 +482,12 @@ export default function PermitPlanningForm({
 
     if (!isPA && !formData.permitNumber) newErrors.permitNumber = "Permit number is required";
     if (!formData.workType) newErrors.workType = "Work type is required";
+    if (
+      formData.workType === "HOT_WORK_SPARK"
+      && !(formData.gasMeasurement.criticalActivities || []).length
+    ) {
+      newErrors.criticalActivities = "Pilih minimal satu jenis aktivitas kritis.";
+    }
     if (!formData.workDescription)
       newErrors.workDescription = "Work description is required";
     if (!formData.zone) newErrors.zone = "Work location (zone) is required";
@@ -453,7 +519,11 @@ export default function PermitPlanningForm({
     // Validate related documents - if checked, number/title is required
     Object.keys(formData.relatedDocuments).forEach((docType) => {
       const doc = formData.relatedDocuments[docType];
-      if (doc.checked && !doc.number.trim()) {
+      if (requiredDocumentKeys.has(docType) && !doc.checked) {
+        newErrors[`relatedDocuments.${docType}`] = "Dokumen ini wajib untuk jenis permit yang dipilih.";
+      }
+      const numberAssignedByPTWC = isPA && ["ra", "jsa"].includes(docType);
+      if (doc.checked && !doc.number.trim() && !numberAssignedByPTWC) {
         newErrors[`relatedDocuments.${docType}`] =
           "Document number/title is required when checked";
       }
@@ -486,7 +556,7 @@ export default function PermitPlanningForm({
       const submitData = {
         ...formData,
         areaName: selectedArea,
-        workLocation: formatLocationPath(selectedArea, selectedFacility, selectedDeck),
+        workLocation: formData.workLocation || formatLocationPath(selectedArea, selectedFacility, selectedDeck),
         userId: userData.id,
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
@@ -540,13 +610,7 @@ export default function PermitPlanningForm({
             equipmentIdentity: "",
             simpleIsolation: false,
             sanctionToTest: false,
-            gasMeasurement: {
-              initial: false,
-              continuous: false,
-              periodic: false,
-              periodicInterval: "",
-              gases: { lel: false, o2: false, h2s: false, co: false, voc: false, benzene: false, so2: false, co2: false },
-            },
+            gasMeasurement: emptyGasMeasurement(),
             status: "DRAFT",
             relatedDocuments: {
               ra: { checked: false, number: "" },
@@ -590,7 +654,33 @@ export default function PermitPlanningForm({
         return;
       }
 
+      const validationErrors = validateForm();
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        return;
+      }
+
       const isUserPA = user.role === "PA";
+      if (isPTWCReview) {
+        const saveResponse = await fetch(`/api/permit-planning/${permitId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...formData,
+            areaName: selectedArea,
+            workLocation: formData.workLocation || formatLocationPath(selectedArea, selectedFacility, selectedDeck),
+            userId: user.id,
+            startDate: new Date(formData.startDate).toISOString(),
+            endDate: new Date(formData.endDate).toISOString(),
+          }),
+        });
+        const saveResult = await saveResponse.json();
+        if (!saveResult.success) {
+          setErrors({ submit: saveResult.message || "Gagal menyimpan data permit." });
+          return;
+        }
+      }
+
       const endpoint = isUserPA
         ? `/api/permit-planning/${permitId}/submit-to-ptwc`
         : `/api/permit-planning/${permitId}/submit`;
@@ -665,18 +755,29 @@ export default function PermitPlanningForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
+        {/* 1. Deskripsi pekerjaan — kolom yang tercetak di lembar 1 */}
         <div className="bg-gray-50 p-6 rounded-xl">
-          <h3 className="text-lg font-semibold text-quaternary mb-4 flex items-center">
+          <h3 className="text-lg font-semibold text-quaternary mb-1 flex items-center">
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Basic Information
+            1. Deskripsi pekerjaan (diisi oleh PA)
           </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            Isian bagian ini tercetak pada kotak yang sama di lembar izin kerja.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isPA ? (
+            <div className="rounded-md border border-primary/20 bg-white p-3">
+              <p className="text-sm font-medium text-quaternary">Jenis izin kerja</p>
+              <p className="mt-1 font-semibold text-primary">
+                {workTypes.find((type) => type.value === formData.workType)?.label || "Pilih jenis permit"}
+              </p>
+            </div>
+          ) : (
           <div>
             <label className="block text-sm font-medium text-quaternary mb-1">
-              Work Permit Type *
+              Jenis izin kerja *
             </label>
             <select
               name="workType"
@@ -696,26 +797,112 @@ export default function PermitPlanningForm({
               <p className="text-red-500 text-sm mt-1">{errors.workType}</p>
             )}
           </div>
+          )}
 
-          <Input
-            label={isPA ? "Permit Number (Optional - assigned by PTWC)" : "Permit Number *"}
-            name="permitNumber"
-            value={formData.permitNumber}
-            onChange={handleChange}
-            placeholder={isPA ? "Optional - assigned by PTWC (e.g., WP-2025-001)" : "Enter unique permit number (e.g., WP-2025-001)"}
-            error={errors.permitNumber}
-            required={!isPA}
-          />
+          {isPA ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-sm font-medium text-quaternary">Nomor permit</p>
+              <p className="mt-1 text-xs text-gray-600">Akan diisi oleh PTWC setelah Anda mengirim permohonan.</p>
+            </div>
+          ) : (
+            <Input
+              label="Permit Number *"
+              name="permitNumber"
+              value={formData.permitNumber}
+              onChange={handleChange}
+              placeholder="Masukkan nomor permit"
+              error={errors.permitNumber}
+              required
+            />
+          )}
 
         </div>
 
-        <div>
+        {formData.workType === "HOT_WORK_SPARK" && (
+          <div className="mt-4 border border-amber-300 bg-amber-50 rounded-lg p-4">
+            <p className="text-sm font-semibold text-quaternary mb-2">
+              Jenis pekerjaan kritis (centang yang tercetak di lembar kuning)
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {CRITICAL_ACTIVITIES.map((activity) => (
+                <label key={activity.key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(formData.gasMeasurement.criticalActivities || []).includes(activity.key)}
+                    onChange={() => toggleCriticalActivity(activity.key)}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <span className="text-sm text-gray-800">{activity.label}</span>
+                </label>
+              ))}
+            </div>
+            {(formData.gasMeasurement.criticalActivities || []).includes("other") && (
+              <input
+                type="text"
+                value={formData.gasMeasurement.criticalOther}
+                onChange={(e) => handleGasMeasurementChange("criticalOther", e.target.value)}
+                placeholder="Sebutkan pekerjaan lain"
+                className="mt-3 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+              />
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <Input
-            label="Work Description *"
+            label="Tanggal rencana pekerjaan *"
+            name="startDate"
+            type="date"
+            value={formData.startDate}
+            onChange={handleChange}
+            error={errors.startDate}
+            required
+          />
+          <Input
+            label="Sampai tanggal *"
+            name="endDate"
+            type="date"
+            value={formData.endDate}
+            onChange={handleChange}
+            error={errors.endDate}
+            required
+          />
+          <div>
+            <label className="block text-sm font-medium text-quaternary mb-1">
+              Durasi pekerjaan
+            </label>
+            <div className="px-3 py-2 border border-dashed border-gray-300 rounded-md bg-white text-sm text-gray-800 min-h-[42px]">
+              {durationText(formData.startDate, formData.endDate) || "Dihitung dari tanggal"}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <Input
+            label="Identitas / no. peralatan"
+            name="equipmentIdentity"
+            value={formData.equipmentIdentity}
+            onChange={handleChange}
+            placeholder="Nomor atau identitas peralatan"
+            error={errors.equipmentIdentity}
+          />
+          <Input
+            label="Lokasi kerja"
+            name="workLocation"
+            value={formData.workLocation}
+            onChange={handleChange}
+            placeholder="Diisi otomatis dari denah, bisa dilengkapi (contoh: ORF / Compressor Room)"
+            error={errors.workLocation}
+          />
+        </div>
+
+        <div className="mt-4">
+          <Input
+            label="Deskripsi pekerjaan *"
             name="workDescription"
             value={formData.workDescription}
             onChange={handleChange}
-            placeholder="Describe the work to be performed"
+            placeholder="Uraian pekerjaan yang akan tercetak di lembar izin"
             multiline
             rows={3}
             error={errors.workDescription}
@@ -723,29 +910,7 @@ export default function PermitPlanningForm({
           />
         </div>
 
-        <div>
-          <Input
-            label="Work Location Description"
-            name="workLocation"
-            value={formData.workLocation}
-            onChange={handleChange}
-            placeholder="Detailed location description (e.g., Unit 1 Compressor Room, Near Tank 101)"
-            error={errors.workLocation}
-          />
-        </div>
-
-        <div>
-          <Input
-            label="Identitas / No. Peralatan (Equipment Identity)"
-            name="equipmentIdentity"
-            value={formData.equipmentIdentity}
-            onChange={handleChange}
-            placeholder="Equipment identity / serial number"
-            error={errors.equipmentIdentity}
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-6">
+        <div className="flex flex-wrap gap-6 mt-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -772,74 +937,25 @@ export default function PermitPlanningForm({
           </label>
         </div>
 
-        {/* Gas Measurement */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-quaternary mb-3">Pengukuran Gas (Gas Measurement)</h4>
-          <div className="flex flex-wrap gap-6 mb-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.gasMeasurement.initial}
-                onChange={(e) => handleGasMeasurementChange("initial", e.target.checked)}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <span className="text-sm text-gray-700">Pengukuran gas awal / initial gas testing</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.gasMeasurement.continuous}
-                onChange={(e) => handleGasMeasurementChange("continuous", e.target.checked)}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <span className="text-sm text-gray-700">Pengukuran gas kontinu / continuous</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.gasMeasurement.periodic}
-                onChange={(e) => handleGasMeasurementChange("periodic", e.target.checked)}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <span className="text-sm text-gray-700">Pengukuran gas periodik setiap</span>
-              {formData.gasMeasurement.periodic && (
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.gasMeasurement.periodicInterval}
-                  onChange={(e) => handleGasMeasurementChange("periodicInterval", e.target.value)}
-                  placeholder="jam"
-                  className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                />
-              )}
-              <span className="text-sm text-gray-700">jam</span>
-            </label>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-600 mb-2">Pengukuran gas yang diperlukan:</p>
-            <div className="flex flex-wrap gap-4">
-              {[
-                { key: "lel", label: "LEL" },
-                { key: "o2", label: "O2" },
-                { key: "h2s", label: "H2S" },
-                { key: "co", label: "CO" },
-                { key: "voc", label: "VOC" },
-                { key: "benzene", label: "Benzene" },
-                { key: "so2", label: "SO2" },
-                { key: "co2", label: "CO2" },
-              ].map((gas) => (
-                <label key={gas.key} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.gasMeasurement.gases[gas.key]}
-                    onChange={(e) => handleGasTypeChange(gas.key, e.target.checked)}
-                    className="w-3.5 h-3.5 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-700">{gas.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <Input
+            label="Diminta oleh (PA) *"
+            name="performingAuthority"
+            value={formData.performingAuthority}
+            onChange={handleChange}
+            placeholder="Nama Performing Authority"
+            error={errors.performingAuthority}
+            required
+          />
+          <Input
+            label="Perusahaan *"
+            name="company"
+            value={formData.company}
+            onChange={handleChange}
+            placeholder="Nama perusahaan"
+            error={errors.company}
+            required
+          />
         </div>
       </div>
 
@@ -852,48 +968,123 @@ export default function PermitPlanningForm({
             2. Dokumen Permit Pack (diisi oleh PA dan ditinjau oleh AA)
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-            {DOCUMENT_TYPES.map((doc) => (
-              <div key={doc.key} className="flex items-start gap-3">
-                <div className="flex items-center pt-1">
-                  <input
-                    type="checkbox"
-                    id={doc.key}
-                    checked={formData.relatedDocuments[doc.key]?.checked || false}
-                    onChange={(e) =>
-                      handleRelatedDocumentChange(doc.key, "checked", e.target.checked)
-                    }
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label
-                    htmlFor={doc.key}
-                    className="block text-sm font-medium text-quaternary mb-1 cursor-pointer"
-                  >
-                    {doc.label}
-                  </label>
-                  {formData.relatedDocuments[doc.key]?.checked && (
-                    <div>
-                      <input
-                        type="text"
-                        placeholder={doc.placeholder}
-                        value={formData.relatedDocuments[doc.key]?.number || ""}
-                        onChange={(e) =>
-                          handleRelatedDocumentChange(doc.key, "number", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                      />
-                      {errors[`relatedDocuments.${doc.key}`] && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors[`relatedDocuments.${doc.key}`]}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+            <div className="space-y-3">
+              {DOC_LEFT.map((doc) => (
+                <DocumentCheck
+                  key={doc.key}
+                  doc={doc}
+                  checked={formData.relatedDocuments[doc.key]?.checked || false}
+                  number={formData.relatedDocuments[doc.key]?.number || ""}
+                  error={errors[`relatedDocuments.${doc.key}`]}
+                  required={requiredDocumentKeys.has(doc.key)}
+                  onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
+                  onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
+                  readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
+                />
+              ))}
+            </div>
+            <div className="space-y-3">
+              {DOC_RIGHT.map((doc) => (
+                <DocumentCheck
+                  key={doc.key}
+                  doc={doc}
+                  checked={formData.relatedDocuments[doc.key]?.checked || false}
+                  number={formData.relatedDocuments[doc.key]?.number || ""}
+                  error={errors[`relatedDocuments.${doc.key}`]}
+                  required={requiredDocumentKeys.has(doc.key)}
+                  onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
+                  onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
+                  readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-primary/20 space-y-3">
+            {DOC_EXTRA.map((doc) => (
+              <DocumentCheck
+                key={doc.key}
+                doc={doc}
+                checked={formData.relatedDocuments[doc.key]?.checked || false}
+                number={formData.relatedDocuments[doc.key]?.number || ""}
+                error={errors[`relatedDocuments.${doc.key}`]}
+                required={requiredDocumentKeys.has(doc.key)}
+                onCheck={(checked) => handleRelatedDocumentChange(doc.key, "checked", checked)}
+                onNumber={(number) => handleRelatedDocumentChange(doc.key, "number", number)}
+                readOnlyNumber={isPA && ["ra", "jsa"].includes(doc.key)}
+              />
             ))}
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4 mt-4 bg-white">
+            <h4 className="text-sm font-semibold text-quaternary mb-1">Pengukuran gas</h4>
+            <p className="text-xs text-gray-500 mb-3">Centang = Ya pada lembar cetak. Kosong = Tidak.</p>
+            <div className="flex flex-wrap gap-6 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.gasMeasurement.initial}
+                  onChange={(e) => handleGasMeasurementChange("initial", e.target.checked)}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Pengukuran gas awal / initial gas testing</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.gasMeasurement.continuous}
+                  onChange={(e) => handleGasMeasurementChange("continuous", e.target.checked)}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Pengukuran gas kontinu</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.gasMeasurement.periodic}
+                  onChange={(e) => handleGasMeasurementChange("periodic", e.target.checked)}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Pengukuran gas periodik setiap</span>
+                <input
+                  type="number"
+                  min="1"
+                  disabled={!formData.gasMeasurement.periodic}
+                  value={formData.gasMeasurement.periodicInterval}
+                  onChange={(e) => handleGasMeasurementChange("periodicInterval", e.target.value)}
+                  placeholder="jam"
+                  className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100"
+                />
+                <span className="text-sm text-gray-700">jam</span>
+              </label>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-2">Pengukuran gas yang diperlukan:</p>
+              <div className="flex flex-wrap gap-4 items-center">
+                {GAS_TYPES.map((gas) => (
+                  <label key={gas.key} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!formData.gasMeasurement.gases?.[gas.key]}
+                      onChange={(e) => handleGasTypeChange(gas.key, e.target.checked)}
+                      className="w-3.5 h-3.5 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <span className="text-sm text-gray-700">{gas.label}</span>
+                  </label>
+                ))}
+                <label className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-700">Lainnya</span>
+                  <input
+                    type="text"
+                    value={formData.gasMeasurement.otherGas}
+                    onChange={(e) => handleGasMeasurementChange("otherGas", e.target.value)}
+                    placeholder="sebutkan"
+                    className="w-36 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1082,95 +1273,72 @@ export default function PermitPlanningForm({
           </div>
         </div>
 
-        {/* Schedule Information */}
-        <div className="bg-quaternary/10 p-6 rounded-xl border border-quaternary/30">
-          <h3 className="text-lg font-semibold text-quaternary mb-4 flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Schedule
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Input
-                label="Start Date *"
-                name="startDate"
-                type="date"
-                value={formData.startDate}
-                onChange={handleChange}
-                error={errors.startDate}
-                required
-              />
-            </div>
-
-            <div>
-              <Input
-                label="End Date *"
-                name="endDate"
-                type="date"
-                value={formData.endDate}
-                onChange={handleChange}
-                error={errors.endDate}
-                required
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Personnel Information */}
+        {/* Nama yang tercetak di bagian 3 */}
         <div className="bg-gray-50 p-6 rounded-xl">
-          <h3 className="text-lg font-semibold text-quaternary mb-4 flex items-center">
+          <h3 className="text-lg font-semibold text-quaternary mb-1 flex items-center">
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
             </svg>
-            Personnel
+            3. Tinjauan dan otorisasi
           </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            Nama ini tercetak di kolom AAA dan SC. Tanda tangan tetap basah di lembar kerja.
+          </p>
 
-          {/* First row: Performing Authority, Company */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <Input
-              label="Performing Authority *"
-              name="performingAuthority"
-              value={formData.performingAuthority}
+              label="Nama Area Authority (AAA) *"
+              name="areaAuthority"
+              value={formData.areaAuthority}
               onChange={handleChange}
-              placeholder="Performing authority"
-              error={errors.performingAuthority}
+              placeholder="Nama yang tercetak di kolom AAA"
+              error={errors.areaAuthority}
               required
             />
-
             <Input
-              label="Company *"
-              name="company"
-              value={formData.company}
+              label="Nama Site Controller (SC) *"
+              name="siteControllerName"
+              value={formData.siteControllerName}
               onChange={handleChange}
-              placeholder="Company name"
-              error={errors.company}
+              placeholder="Nama yang tercetak di kolom SC"
+              error={errors.siteControllerName}
               required
             />
           </div>
 
-          {/* Second row: Site Controller Name, Area Authority */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Site Controller Name *"
-              name="siteControllerName"
-              value={formData.siteControllerName}
-              onChange={handleChange}
-              placeholder="Site controller name"
-              error={errors.siteControllerName}
-              required
-            />
-
-            <Input
-              label="Area Authority *"
-              name="areaAuthority"
-              value={formData.areaAuthority}
-              onChange={handleChange}
-              placeholder="Area authority"
-              error={errors.areaAuthority}
-              required
-            />
+          <div>
+            <p className="text-sm font-medium text-quaternary mb-2">
+              Pekerjaan masuk kategori Remote Mode Condition
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="remoteMode"
+                  checked={formData.gasMeasurement.remoteMode === true}
+                  onChange={() => handleGasMeasurementChange("remoteMode", true)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Ya</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="remoteMode"
+                  checked={formData.gasMeasurement.remoteMode === false}
+                  onChange={() => handleGasMeasurementChange("remoteMode", false)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Tidak</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => handleGasMeasurementChange("remoteMode", null)}
+                className="text-xs text-gray-500 underline"
+              >
+                Kosongkan
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1240,7 +1408,7 @@ export default function PermitPlanningForm({
           </Button>
 
           {/* Submit for Approval Button - Only show for DRAFT permits */}
-          {editData && editData.status === 'DRAFT' && (
+          {editData && (editData.status === 'DRAFT' || isPTWCReview) && (
             <Button 
               type="button" 
               disabled={loading || submittingForApproval}
@@ -1259,7 +1427,7 @@ export default function PermitPlanningForm({
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  {isPA ? "Submit to PTWC" : "Submit for Approval"}
+                  {isPA ? "Submit to PTWC" : isPTWCReview ? "Kirim ke AA untuk Approval" : "Submit for Approval"}
                 </>
               )}
             </Button>
