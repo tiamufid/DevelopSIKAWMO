@@ -307,7 +307,7 @@ function PermitPlanning() {
               >
                 <option value="">All Areas (4 Area)</option>
                 <option value="ORF">ORF (Onshore Receiving Facility)</option>
-                <option value="LSB">LSB (Logistic Supply Base)</option>
+                <option value="LSB">LSB (Lamongan Shorebase)</option>
                 <option value="East">East (Offshore Timur)</option>
                 <option value="West">West (Offshore Barat)</option>
               </select>
